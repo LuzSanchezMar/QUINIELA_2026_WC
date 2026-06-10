@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quiniela Mundial 2026</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Mundial 2026</p>
+        <h1>Quiniela familiar</h1>
+      </div>
+      <div class="status-pill" id="syncStatus">Iniciando</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel player-panel" aria-labelledby="playerTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Participante</p>
+            <h2 id="playerTitle">Tus pronosticos</h2>
+          </div>
+          <button class="ghost-button" id="refreshButton" type="button" title="Actualizar datos">Actualizar</button>
+        </div>
+
+        <form class="name-form" id="nameForm">
+          <label for="playerName">Nombre</label>
+          <div class="inline-fields">
+            <input id="playerName" name="playerName" autocomplete="name" placeholder="Ej. Tia Paty" required>
+            <button type="submit">Entrar</button>
+          </div>
+        </form>
+
+        <div class="notice" id="playerNotice">Escribe tu nombre para guardar tus marcadores.</div>
+        <div class="match-list" id="matchList"></div>
+      </section>
+
+      <aside class="side-stack">
+        <section class="panel" aria-labelledby="leaderboardTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Tabla</p>
+              <h2 id="leaderboardTitle">Posiciones</h2>
+            </div>
+          </div>
+          <div class="leaderboard" id="leaderboard"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="adminTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Admin</p>
+              <h2 id="adminTitle">Resultados</h2>
+            </div>
+          </div>
+          <form class="admin-login" id="adminLogin">
+            <label for="adminPin">PIN</label>
+            <div class="inline-fields">
+              <input id="adminPin" name="adminPin" type="password" inputmode="numeric" placeholder="1234">
+              <button type="submit">Abrir</button>
+            </div>
+          </form>
+          <div class="admin-results" id="adminResults"></div>
+        </section>
+      </aside>
+    </main>
+
+    <template id="matchTemplate">
+      <article class="match-card">
+        <div class="match-meta"></div>
+        <div class="score-row">
+          <label class="team-pick">
+            <span class="home-team"></span>
+            <input class="home-score" type="number" min="0" max="20" inputmode="numeric" aria-label="Goles local">
+          </label>
+          <span class="versus">vs</span>
+          <label class="team-pick team-pick-away">
+            <span class="away-team"></span>
+            <input class="away-score" type="number" min="0" max="20" inputmode="numeric" aria-label="Goles visitante">
+          </label>
+          <button class="save-pick" type="button">Guardar</button>
+        </div>
+        <div class="result-line"></div>
+      </article>
+    </template>
+
+    <script src="./matches.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/state.js": {
+      "runtime": "@vercel/node@3.2.12"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ]
+}

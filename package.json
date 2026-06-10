@@ -1,0 +1,10 @@
+{
+  "name": "quiniela-2026-wc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Quiniela familiar para el Mundial de Futbol 2026, lista para Vercel.",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  }
+}
