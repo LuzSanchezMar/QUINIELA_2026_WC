@@ -19,14 +19,14 @@ App familiar para pronosticar partidos del Mundial 2026 y ver una tabla de posic
 
 ## Desarrollo local
 
-La app funciona abriendo `index.html` directamente para probar el modo local.
-
-Para probar la API de Vercel:
+Instala dependencias y ejecuta Next.js:
 
 ```bash
-npm i -g vercel
-vercel dev
+npm install
+npm run dev
 ```
+
+Abre `http://localhost:3000`.
 
 ## Despliegue en Vercel
 
@@ -45,4 +45,4 @@ ADMIN_PIN=1234
 
 ## Cambiar partidos
 
-Edita `matches.js`. Puedes agregar todos los partidos del Mundial usando el mismo formato.
+Edita `lib/matches.js`. Puedes agregar todos los partidos del Mundial usando el mismo formato.
