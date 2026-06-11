@@ -137,7 +137,10 @@ export default function QuinielaClient({ view = "player" }) {
 
   async function handlePlayerSubmit(event) {
     event.preventDefault();
-    const action = event.nativeEvent.submitter?.value || "login";
+    await handlePlayerAuth("login");
+  }
+
+  async function handlePlayerAuth(action) {
     const name = normalizeName(playerInput);
     if (!name || !passwordInput) return;
     setStatus({ text: action === "register" ? "Creando cuenta" : "Entrando", mode: "loading" });
@@ -243,8 +246,8 @@ export default function QuinielaClient({ view = "player" }) {
                     onChange={(event) => setPasswordInput(event.target.value)}
                   />
                   <div className="auth-actions">
-                    <button type="submit" value="login">Entrar</button>
-                    <button className="ghost-button" type="submit" value="register">Crear cuenta</button>
+                    <button type="submit">Entrar</button>
+                    <button className="ghost-button" type="button" onClick={() => handlePlayerAuth("register")}>Crear cuenta</button>
                   </div>
                 </div>
               </form>
