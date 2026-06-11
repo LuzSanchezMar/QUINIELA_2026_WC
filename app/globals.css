@@ -282,6 +282,19 @@ label {
   padding: 10px 12px;
 }
 
+.session-bar {
+  align-items: center;
+  background: var(--field);
+  border: 1px solid rgba(15, 123, 87, 0.22);
+  border-radius: 8px;
+  color: var(--primary-dark);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+}
+
 .match-list,
 .admin-results,
 .leaderboard,

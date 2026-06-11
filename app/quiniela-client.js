@@ -211,42 +211,47 @@ export default function QuinielaClient({ view = "player" }) {
             </div>
           </div>
 
-          <form className="name-form" onSubmit={handlePlayerSubmit}>
-            <label htmlFor="playerName">Nombre</label>
-            <div className="inline-fields">
-              <input
-                id="playerName"
-                name="playerName"
-                autoComplete="name"
-                placeholder="Ej. Tia Paty"
-                required
-                value={playerInput}
-                onChange={(event) => setPlayerInput(event.target.value)}
-              />
+          {currentPlayer && playerSession?.token ? (
+            <div className="session-bar">
+              <span>Jugando como <strong>{currentPlayer}</strong></span>
+              <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Salir</button>
             </div>
-            <label htmlFor="playerPassword">Contrasena</label>
-            <div className="inline-fields">
-              <input
-                id="playerPassword"
-                name="playerPassword"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={passwordInput}
-                onChange={(event) => setPasswordInput(event.target.value)}
-              />
-              <div className="auth-actions">
-                <button type="submit" value="login">Entrar</button>
-                <button className="ghost-button" type="submit" value="register">Crear cuenta</button>
-              </div>
-            </div>
-          </form>
+          ) : (
+            <>
+              <form className="name-form" onSubmit={handlePlayerSubmit}>
+                <label htmlFor="playerName">Nombre</label>
+                <div className="inline-fields">
+                  <input
+                    id="playerName"
+                    name="playerName"
+                    autoComplete="name"
+                    placeholder="Ej. Tia Paty"
+                    required
+                    value={playerInput}
+                    onChange={(event) => setPlayerInput(event.target.value)}
+                  />
+                </div>
+                <label htmlFor="playerPassword">Contrasena</label>
+                <div className="inline-fields">
+                  <input
+                    id="playerPassword"
+                    name="playerPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    value={passwordInput}
+                    onChange={(event) => setPasswordInput(event.target.value)}
+                  />
+                  <div className="auth-actions">
+                    <button type="submit" value="login">Entrar</button>
+                    <button className="ghost-button" type="submit" value="register">Crear cuenta</button>
+                  </div>
+                </div>
+              </form>
 
-          <div className="notice">
-            {currentPlayer
-              ? <>Listo, estas jugando como {currentPlayer}. <button className="link-button" type="button" onClick={handlePlayerLogout}>Salir</button></>
-              : "Entra o crea tu cuenta para guardar tus marcadores. Maximo 10 participantes."}
-          </div>
+              <div className="notice">Entra o crea tu cuenta para guardar tus marcadores. Maximo 10 participantes.</div>
+            </>
+          )}
           <section className="rules-panel" aria-label="Sistema de puntos">
             <h3>Sistema de puntos</h3>
             <div className="rules-grid">
