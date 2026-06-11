@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { matches } from "../lib/matches";
+import { flagForTeam } from "../lib/team-assets";
 
 const storageKey = "quiniela-2026-state";
 const nameKey = "quiniela-2026-player";
@@ -141,12 +142,22 @@ export default function QuinielaClient({ view = "player" }) {
     <>
       <header className="app-header">
         <div>
-          <p className="eyebrow">Mundial 2026</p>
-          <h1>Quiniela familiar</h1>
+          <div className="brand-line">
+            <img
+              className="wc-logo"
+              src="https://upload.wikimedia.org/wikipedia/en/thumb/1/17/2026_FIFA_World_Cup_emblem.svg/250px-2026_FIFA_World_Cup_emblem.svg.png"
+              alt="FIFA World Cup 2026"
+            />
+            <div>
+              <p className="eyebrow">Mundial 2026</p>
+              <h1>Quiniela familiar</h1>
+            </div>
+          </div>
         </div>
         <div className="header-actions">
           <nav className="view-nav" aria-label="Vistas">
             <a className={view === "player" ? "active" : ""} href="/">Participante</a>
+            <a className={view === "standings" ? "active" : ""} href="/posiciones">Posiciones</a>
             <a className={view === "admin" ? "active" : ""} href="/admin">Admin</a>
           </nav>
           <div className="status-pill" data-mode={status.mode}>
@@ -155,7 +166,7 @@ export default function QuinielaClient({ view = "player" }) {
         </div>
       </header>
 
-      <main className={view === "admin" ? "layout layout-admin" : "layout"}>
+      <main className={view === "admin" || view === "standings" ? "layout layout-admin" : "layout"}>
         {view === "player" && (
         <section className="panel player-panel" aria-labelledby="playerTitle">
           <div className="section-heading">
@@ -163,9 +174,6 @@ export default function QuinielaClient({ view = "player" }) {
               <p className="eyebrow">Participante</p>
               <h2 id="playerTitle">Tus pronosticos</h2>
             </div>
-            <button className="ghost-button" type="button" title="Actualizar datos" onClick={loadState}>
-              Actualizar
-            </button>
           </div>
 
           <form className="name-form" onSubmit={handlePlayerSubmit}>
@@ -187,6 +195,14 @@ export default function QuinielaClient({ view = "player" }) {
           <div className="notice">
             {currentPlayer ? `Listo, estas jugando como ${currentPlayer}.` : "Escribe tu nombre para guardar tus marcadores."}
           </div>
+          <section className="rules-panel" aria-label="Sistema de puntos">
+            <h3>Sistema de puntos</h3>
+            <div className="rules-grid">
+              <span><strong>3 pts</strong> marcador exacto</span>
+              <span><strong>1 pt</strong> ganador o empate correcto</span>
+              <span><strong>0 pts</strong> sin coincidencia</span>
+            </div>
+          </section>
           <div className="match-list">
             {matches.map((match) => (
               <MatchCard
@@ -203,7 +219,7 @@ export default function QuinielaClient({ view = "player" }) {
         )}
 
         <aside className="side-stack">
-          {view === "player" && (
+          {(view === "player" || view === "standings") && (
           <section className="panel" aria-labelledby="leaderboardTitle">
             <div className="section-heading">
               <div>
@@ -211,6 +227,7 @@ export default function QuinielaClient({ view = "player" }) {
                 <h2 id="leaderboardTitle">Posiciones</h2>
               </div>
             </div>
+            {view === "standings" && <Podium rows={leaderboard} />}
             <div className="leaderboard">
               {leaderboard.length ? (
                 leaderboard.map((row, index) => (
@@ -237,9 +254,6 @@ export default function QuinielaClient({ view = "player" }) {
                 <p className="eyebrow">Admin</p>
                 <h2 id="adminTitle">Resultados</h2>
               </div>
-              <button className="ghost-button" type="button" title="Actualizar datos" onClick={loadState}>
-                Actualizar
-              </button>
             </div>
             <form className="admin-login" onSubmit={handleAdminSubmit}>
               <label htmlFor="adminPin">PIN</label>
@@ -282,7 +296,8 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
     setAway(pick ? pick.away : "");
   }, [pick]);
 
-  const locked = hasMatchStarted(match);
+  const teamsPending = match.teamsConfirmed === false;
+  const locked = hasMatchStarted(match) || teamsPending;
 
   function handleSave() {
     if (!canSave || locked || home === "" || away === "") return;
@@ -294,7 +309,7 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
       <div className="match-meta">{`${match.group} | ${formatMatchDate(match.date)} | ${match.venue}`}</div>
       <div className="score-row">
         <label className="team-pick">
-          <span>{match.home}</span>
+          <span><span className="flag-icon">{flagForTeam(match.home)}</span>{match.home}</span>
           <input
             type="number"
             min="0"
@@ -308,7 +323,7 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
         </label>
         <span className="versus">vs</span>
         <label className="team-pick team-pick-away">
-          <span>{match.away}</span>
+          <span><span className="flag-icon">{flagForTeam(match.away)}</span>{match.away}</span>
           <input
             type="number"
             min="0"
@@ -321,12 +336,14 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
           />
         </label>
         <button className="save-pick" type="button" onClick={handleSave} disabled={locked}>
-          {locked ? "Cerrado" : "Guardar"}
+          {teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
         </button>
       </div>
       <div className="result-line">
         {result
           ? `Resultado: ${result.home}-${result.away} | Tus puntos: ${scorePrediction(pick, result)}`
+          : teamsPending
+            ? "Equipos por definir. Pronostico pendiente"
           : locked
             ? "Pronostico cerrado. Resultado pendiente"
             : "Resultado pendiente"}
@@ -351,7 +368,7 @@ function AdminCard({ match, result, onSave }) {
 
   return (
     <article className="admin-card">
-      <h3>{match.home} vs {match.away}</h3>
+      <h3><span className="flag-icon">{flagForTeam(match.home)}</span>{match.home} vs <span className="flag-icon">{flagForTeam(match.away)}</span>{match.away}</h3>
       <div className="match-meta">{`${match.group} | ${formatMatchDate(match.date)}`}</div>
       <div className="admin-score-row">
         <input
@@ -376,6 +393,31 @@ function AdminCard({ match, result, onSave }) {
         <button type="button" onClick={handleSave}>Guardar</button>
       </div>
     </article>
+  );
+}
+
+function Podium({ rows }) {
+  const topThree = rows.slice(0, 3);
+  if (!topThree.length) return <div className="empty-state podium-empty">El podio aparecera cuando haya participantes.</div>;
+
+  const slots = [topThree[1], topThree[0], topThree[2]];
+  const places = [2, 1, 3];
+
+  return (
+    <div className="celebration-board" aria-label="Podio de ganadores">
+      <div className="confetti" aria-hidden="true">
+        {Array.from({ length: 18 }).map((_, index) => <span key={index} />)}
+      </div>
+      <div className="podium">
+        {slots.map((row, index) => row ? (
+          <div className={`podium-place place-${places[index]}`} key={row.name}>
+            <span className="medal">{places[index]}</span>
+            <strong>{row.name}</strong>
+            <span>{row.points} pts</span>
+          </div>
+        ) : <div className="podium-place podium-placeholder" key={places[index]} />)}
+      </div>
+    </div>
   );
 }
 
@@ -456,6 +498,7 @@ function applyMutation(state, action, payload, adminPin) {
   if (action === "prediction") {
     const match = matches.find((item) => item.id === payload.matchId);
     if (!match) throw new Error("Partido no valido");
+    if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
     if (hasMatchStarted(match)) throw new Error("El partido ya empezo");
     state.players[payload.name] = state.players[payload.name] || { name: payload.name, joinedAt: new Date().toISOString() };
     state.predictions[payload.name] = state.predictions[payload.name] || {};

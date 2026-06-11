@@ -10,6 +10,8 @@ const key = "quiniela-2026-state";
 
 export async function GET() {
   const state = await readState();
+  const synced = await syncRealResults(state);
+  if (synced) await writeState(state);
   return json({ state, storage: hasKv() ? "kv" : "memory" });
 }
 
@@ -95,6 +97,7 @@ function requireScore(home, away) {
 function requireOpenMatch(matchId) {
   const match = matches.find((item) => item.id === matchId);
   if (!match) throw new Error("Partido no valido");
+  if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
   if (Date.now() >= new Date(match.date).getTime()) throw new Error("El partido ya empezo");
 }
 
@@ -134,6 +137,52 @@ async function writeState(state) {
     },
     body: JSON.stringify(state)
   });
+}
+
+async function syncRealResults(state) {
+  if (!process.env.RESULTS_API_URL) return false;
+
+  try {
+    const response = await fetch(process.env.RESULTS_API_URL, {
+      headers: process.env.RESULTS_API_TOKEN
+        ? { Authorization: `Bearer ${process.env.RESULTS_API_TOKEN}` }
+        : {},
+      cache: "no-store"
+    });
+    if (!response.ok) return false;
+
+    const data = await response.json();
+    const results = Array.isArray(data) ? data : data.results || data.matches || [];
+    let changed = false;
+
+    for (const item of results) {
+      const matchId = item.matchId || item.id;
+      const home = item.homeScore ?? item.home ?? item.score?.home;
+      const away = item.awayScore ?? item.away ?? item.score?.away;
+      const status = String(item.status || item.state || "").toLowerCase();
+      const finished = item.finished === true || ["finished", "final", "ft", "full_time"].includes(status);
+
+      if (!finished || !matchId || home === undefined || away === undefined) continue;
+      const match = matches.find((entry) => entry.id === matchId);
+      if (!match) continue;
+      requireScore(home, away);
+
+      const current = state.results[matchId];
+      if (!current || Number(current.home) !== Number(home) || Number(current.away) !== Number(away)) {
+        state.results[matchId] = {
+          home: Number(home),
+          away: Number(away),
+          updatedAt: new Date().toISOString(),
+          source: "auto"
+        };
+        changed = true;
+      }
+    }
+
+    return changed;
+  } catch {
+    return false;
+  }
 }
 
 function clone(value) {

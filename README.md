@@ -30,6 +30,7 @@ npm run dev
 Abre `http://localhost:3000`.
 
 La vista de administrador esta en `http://localhost:3000/admin`.
+La vista publica de posiciones esta en `http://localhost:3000/posiciones`.
 
 ## Despliegue en Vercel
 
@@ -49,3 +50,16 @@ ADMIN_PIN=1234
 ## Cambiar partidos
 
 Edita `lib/matches.js`. Puedes agregar todos los partidos del Mundial usando el mismo formato.
+
+Los partidos de eliminatoria pueden quedarse como placeholders con `teamsConfirmed: false`; se muestran en la quiniela, pero no aceptan pronosticos hasta que reemplaces los nombres y cambies ese campo a `true`.
+
+## Resultados automaticos
+
+Puedes configurar una fuente externa de resultados con estas variables:
+
+```text
+RESULTS_API_URL=...
+RESULTS_API_TOKEN=...
+```
+
+La app espera resultados finalizados con `matchId`, `homeScore`, `awayScore` y `status`/`finished`. Si no configuras una fuente, puedes seguir capturando resultados desde `/admin`.
