@@ -6,6 +6,7 @@ import { flagForTeam } from "../lib/team-assets";
 
 const storageKey = "quiniela-2026-state";
 const nameKey = "quiniela-2026-player";
+const sessionKey = "quiniela-2026-session";
 const adminKey = "quiniela-2026-admin-pin";
 const emptyState = {
   players: {},
@@ -17,6 +18,8 @@ export default function QuinielaClient({ view = "player" }) {
   const [state, setState] = useState(emptyState);
   const [currentPlayer, setCurrentPlayer] = useState("");
   const [playerInput, setPlayerInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [playerSession, setPlayerSession] = useState(null);
   const [adminPin, setAdminPin] = useState("");
   const [adminInput, setAdminInput] = useState("");
   const [status, setStatus] = useState({ text: "Iniciando", mode: "" });
@@ -24,9 +27,16 @@ export default function QuinielaClient({ view = "player" }) {
 
   useEffect(() => {
     const savedPlayer = localStorage.getItem(nameKey) || "";
+    const savedSession = JSON.parse(sessionStorage.getItem(sessionKey) || "null");
     const savedPin = sessionStorage.getItem(adminKey) || "";
-    setCurrentPlayer(savedPlayer);
-    setPlayerInput(savedPlayer);
+    if (savedSession?.token && savedSession?.name) {
+      setCurrentPlayer(savedSession.name);
+      setPlayerInput(savedSession.name);
+      setPlayerSession(savedSession);
+    } else {
+      setCurrentPlayer(savedPlayer);
+      setPlayerInput(savedPlayer);
+    }
     setAdminPin(savedPin);
     setAdminInput(savedPin);
     loadState();
@@ -47,10 +57,11 @@ export default function QuinielaClient({ view = "player" }) {
 
   const prizeAmount = Object.keys(state.players).length * 100;
 
-  async function apiFetch(options) {
+  async function apiFetch(options = {}) {
+    const { headers: optionHeaders, ...rest } = options;
     const response = await fetch("/api/state", {
-      headers: { "Content-Type": "application/json" },
-      ...options
+      headers: { "Content-Type": "application/json", ...optionHeaders },
+      ...rest
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -63,10 +74,9 @@ export default function QuinielaClient({ view = "player" }) {
     setStatus({ text: "Sincronizando", mode: "loading" });
     try {
       const data = await apiFetch();
-      const apiMode = data.storage === "kv";
-      setUsingApi(apiMode);
-      setState(apiMode ? normalizeState(data.state) : mergeState(data.state, hydrateLocal()));
-      setStatus({ text: apiMode ? "En linea" : "Modo local", mode: apiMode ? "online" : "local" });
+      setUsingApi(true);
+      setState(normalizeState(data.state));
+      setStatus({ text: data.storage === "kv" ? "En linea" : "Servidor local", mode: data.storage === "kv" ? "online" : "local" });
     } catch {
       setUsingApi(false);
       setState(hydrateLocal());
@@ -93,6 +103,7 @@ export default function QuinielaClient({ view = "player" }) {
     try {
       const data = await apiFetch({
         method: "POST",
+        headers: playerSession?.token ? { Authorization: `Bearer ${playerSession.token}` } : {},
         body: JSON.stringify({ action, payload })
       });
       setState(normalizeState(data.state));
@@ -126,11 +137,31 @@ export default function QuinielaClient({ view = "player" }) {
 
   async function handlePlayerSubmit(event) {
     event.preventDefault();
+    const action = event.nativeEvent.submitter?.value || "login";
     const name = normalizeName(playerInput);
-    if (!name) return;
-    setCurrentPlayer(name);
-    localStorage.setItem(nameKey, name);
-    await saveState("join", { name });
+    if (!name || !passwordInput) return;
+    setStatus({ text: action === "register" ? "Creando cuenta" : "Entrando", mode: "loading" });
+    try {
+      const data = await apiFetch({
+        method: "POST",
+        body: JSON.stringify({ action, payload: { name, password: passwordInput } })
+      });
+      setCurrentPlayer(data.session.name);
+      setPlayerSession(data.session);
+      setPasswordInput("");
+      setState(normalizeState(data.state));
+      localStorage.setItem(nameKey, data.session.name);
+      sessionStorage.setItem(sessionKey, JSON.stringify(data.session));
+      setStatus({ text: "En sesion", mode: "online" });
+    } catch (error) {
+      setStatus({ text: error.message, mode: "error" });
+    }
+  }
+
+  function handlePlayerLogout() {
+    setCurrentPlayer("");
+    setPlayerSession(null);
+    sessionStorage.removeItem(sessionKey);
   }
 
   function handleAdminSubmit(event) {
@@ -192,12 +223,29 @@ export default function QuinielaClient({ view = "player" }) {
                 value={playerInput}
                 onChange={(event) => setPlayerInput(event.target.value)}
               />
-              <button type="submit">Entrar</button>
+            </div>
+            <label htmlFor="playerPassword">Contrasena</label>
+            <div className="inline-fields">
+              <input
+                id="playerPassword"
+                name="playerPassword"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={passwordInput}
+                onChange={(event) => setPasswordInput(event.target.value)}
+              />
+              <div className="auth-actions">
+                <button type="submit" value="login">Entrar</button>
+                <button className="ghost-button" type="submit" value="register">Crear cuenta</button>
+              </div>
             </div>
           </form>
 
           <div className="notice">
-            {currentPlayer ? `Listo, estas jugando como ${currentPlayer}.` : "Escribe tu nombre para guardar tus marcadores."}
+            {currentPlayer
+              ? <>Listo, estas jugando como {currentPlayer}. <button className="link-button" type="button" onClick={handlePlayerLogout}>Salir</button></>
+              : "Entra o crea tu cuenta para guardar tus marcadores. Maximo 10 participantes."}
           </div>
           <section className="rules-panel" aria-label="Sistema de puntos">
             <h3>Sistema de puntos</h3>
@@ -215,7 +263,7 @@ export default function QuinielaClient({ view = "player" }) {
                 pick={(state.predictions[currentPlayer] || {})[match.id]}
                 result={state.results[match.id]}
                 onSave={(home, away) => saveState("prediction", { name: currentPlayer, matchId: match.id, home, away })}
-                canSave={Boolean(currentPlayer)}
+                canSave={Boolean(currentPlayer && playerSession?.token)}
               />
             ))}
           </div>

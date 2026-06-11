@@ -7,12 +7,13 @@ const initialState = {
 };
 
 const key = "quiniela-2026-state";
+globalThis.__quinielaMemoryState = globalThis.__quinielaMemoryState || clone(initialState);
 
 export async function GET() {
   const state = await readState();
   const synced = await syncRealResults(state);
   if (synced) await writeState(state);
-  return json({ state, storage: hasKv() ? "kv" : "memory" });
+  return json({ state: publicState(state), storage: hasKv() ? "kv" : "memory" });
 }
 
 export async function POST(request) {
@@ -22,13 +23,12 @@ export async function POST(request) {
   const state = await readState();
 
   try {
-    mutate(state, action, payload, request.headers.get("x-admin-pin"));
+    const result = await mutate(state, action, payload, request);
+    await writeState(state);
+    return json({ state: publicState(state), storage: hasKv() ? "kv" : "memory", ...result });
   } catch (error) {
     return json({ error: error.message }, 400);
   }
-
-  await writeState(state);
-  return json({ state, storage: hasKv() ? "kv" : "memory" });
 }
 
 function json(body, status = 200) {
@@ -40,21 +40,43 @@ function json(body, status = 200) {
   });
 }
 
-function mutate(state, action, payload, adminPin) {
-  if (action === "join") {
+async function mutate(state, action, payload, request) {
+  if (action === "register") {
     const name = normalizeName(payload.name);
     requireName(name);
-    state.players[name] = state.players[name] || { name, joinedAt: new Date().toISOString() };
+    requirePassword(payload.password);
+    if (state.players[name]?.passwordHash) throw new Error("Ese nombre ya esta registrado");
+    if (!state.players[name] && Object.keys(state.players).length >= 10) throw new Error("La quiniela ya tiene 10 participantes");
+    const password = await hashPassword(payload.password);
+    state.players[name] = {
+      ...(state.players[name] || {}),
+      name,
+      joinedAt: state.players[name]?.joinedAt || new Date().toISOString(),
+      passwordHash: password.hash,
+      passwordSalt: password.salt
+    };
     state.predictions[name] = state.predictions[name] || {};
-    return;
+    return { session: await createSession(name) };
+  }
+
+  if (action === "login") {
+    const name = normalizeName(payload.name);
+    requireName(name);
+    requirePassword(payload.password);
+    const player = state.players[name];
+    if (!player?.passwordHash || !(await verifyPassword(payload.password, player.passwordSalt, player.passwordHash))) {
+      throw new Error("Nombre o contrasena incorrectos");
+    }
+    return { session: await createSession(name) };
   }
 
   if (action === "prediction") {
-    const name = normalizeName(payload.name);
+    const session = await verifySession(request.headers.get("authorization"));
+    const name = normalizeName(session.name);
     requireName(name);
     requireScore(payload.home, payload.away);
     requireOpenMatch(payload.matchId);
-    state.players[name] = state.players[name] || { name, joinedAt: new Date().toISOString() };
+    if (!state.players[name]) throw new Error("Participante no registrado");
     state.predictions[name] = state.predictions[name] || {};
     state.predictions[name][payload.matchId] = {
       home: Number(payload.home),
@@ -65,6 +87,7 @@ function mutate(state, action, payload, adminPin) {
   }
 
   if (action === "result") {
+    const adminPin = request.headers.get("x-admin-pin");
     const expectedPin = process.env.ADMIN_PIN || "180799";
     if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
     requireScore(payload.home, payload.away);
@@ -94,6 +117,12 @@ function requireScore(home, away) {
   if (homeScore < 0 || awayScore < 0 || homeScore > 20 || awayScore > 20) throw new Error("Marcador fuera de rango");
 }
 
+function requirePassword(password) {
+  if (typeof password !== "string" || password.length < 4 || password.length > 80) {
+    throw new Error("La contrasena debe tener entre 4 y 80 caracteres");
+  }
+}
+
 function requireOpenMatch(matchId) {
   const match = matches.find((item) => item.id === matchId);
   if (!match) throw new Error("Partido no valido");
@@ -105,8 +134,24 @@ function hasKv() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
+function publicState(state) {
+  return {
+    players: Object.fromEntries(
+      Object.entries(state.players || {}).map(([name, player]) => [
+        name,
+        {
+          name: player.name,
+          joinedAt: player.joinedAt
+        }
+      ])
+    ),
+    predictions: state.predictions || {},
+    results: state.results || {}
+  };
+}
+
 async function readState() {
-  if (!hasKv()) return clone(initialState);
+  if (!hasKv()) return clone(globalThis.__quinielaMemoryState);
 
   const result = await fetch(`${process.env.KV_REST_API_URL}/get/${key}`, {
     headers: {
@@ -127,7 +172,10 @@ async function readState() {
 }
 
 async function writeState(state) {
-  if (!hasKv()) return;
+  if (!hasKv()) {
+    globalThis.__quinielaMemoryState = clone(state);
+    return;
+  }
 
   await fetch(`${process.env.KV_REST_API_URL}/set/${key}`, {
     method: "POST",
@@ -187,4 +235,88 @@ async function syncRealResults(state) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+async function hashPassword(password, salt = randomToken(16)) {
+  const key = await crypto.subtle.importKey("raw", encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: base64UrlToBytes(salt),
+      iterations: 120000
+    },
+    key,
+    256
+  );
+
+  return {
+    salt,
+    hash: bytesToBase64Url(new Uint8Array(bits))
+  };
+}
+
+async function verifyPassword(password, salt, expectedHash) {
+  const passwordHash = await hashPassword(password, salt);
+  return timingSafeEqual(passwordHash.hash, expectedHash);
+}
+
+async function createSession(name) {
+  const expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  const payload = bytesToBase64Url(encode(JSON.stringify({ name, expiresAt, nonce: randomToken(12) })));
+  const signature = await sign(payload);
+  return {
+    name,
+    token: `${payload}.${signature}`,
+    expiresAt
+  };
+}
+
+async function verifySession(header) {
+  const token = String(header || "").replace(/^Bearer\s+/i, "");
+  const parts = token.split(".");
+  if (parts.length !== 2) throw new Error("Sesion requerida");
+  const [payload, signature] = parts;
+  if (!timingSafeEqual(await sign(payload), signature)) throw new Error("Sesion invalida");
+  const { name, expiresAt } = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload)));
+  if (!name || Number(expiresAt) < Date.now()) throw new Error("Sesion expirada");
+  return { name };
+}
+
+async function sign(value) {
+  const key = await crypto.subtle.importKey("raw", encode(sessionSecret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, encode(value));
+  return bytesToBase64Url(new Uint8Array(signature));
+}
+
+function sessionSecret() {
+  return process.env.AUTH_SECRET || process.env.ADMIN_PIN || "quiniela-local-secret";
+}
+
+function randomToken(size) {
+  const bytes = new Uint8Array(size);
+  crypto.getRandomValues(bytes);
+  return bytesToBase64Url(bytes);
+}
+
+function encode(value) {
+  return new TextEncoder().encode(value);
+}
+
+function bytesToBase64Url(bytes) {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBytes(value) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+function timingSafeEqual(left, right) {
+  if (typeof left !== "string" || typeof right !== "string" || left.length !== right.length) return false;
+  let result = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    result |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return result === 0;
 }
