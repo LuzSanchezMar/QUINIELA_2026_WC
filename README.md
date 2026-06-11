@@ -6,8 +6,9 @@ App familiar para pronosticar partidos del Mundial 2026 y ver una tabla de posic
 
 - Participantes por nombre, sin cuentas.
 - Pronosticos de marcador por partido.
+- Cierre automatico de pronosticos cuando empieza cada partido.
 - Tabla de puntos automatica.
-- Panel de admin con PIN para capturar resultados reales.
+- Vista separada de admin con PIN para capturar resultados reales.
 - Persistencia en Vercel KV/Upstash mediante API serverless.
 - Modo local de respaldo con `localStorage` si aun no configuras KV.
 
@@ -27,6 +28,8 @@ npm run dev
 ```
 
 Abre `http://localhost:3000`.
+
+La vista de administrador esta en `http://localhost:3000/admin`.
 
 ## Despliegue en Vercel
 

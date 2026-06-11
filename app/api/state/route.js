@@ -1,3 +1,5 @@
+import { matches } from "../../../lib/matches";
+
 const initialState = {
   players: {},
   predictions: {},
@@ -49,6 +51,7 @@ function mutate(state, action, payload, adminPin) {
     const name = normalizeName(payload.name);
     requireName(name);
     requireScore(payload.home, payload.away);
+    requireOpenMatch(payload.matchId);
     state.players[name] = state.players[name] || { name, joinedAt: new Date().toISOString() };
     state.predictions[name] = state.predictions[name] || {};
     state.predictions[name][payload.matchId] = {
@@ -87,6 +90,12 @@ function requireScore(home, away) {
   const awayScore = Number(away);
   if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore)) throw new Error("Marcador invalido");
   if (homeScore < 0 || awayScore < 0 || homeScore > 20 || awayScore > 20) throw new Error("Marcador fuera de rango");
+}
+
+function requireOpenMatch(matchId) {
+  const match = matches.find((item) => item.id === matchId);
+  if (!match) throw new Error("Partido no valido");
+  if (Date.now() >= new Date(match.date).getTime()) throw new Error("El partido ya empezo");
 }
 
 function hasKv() {
