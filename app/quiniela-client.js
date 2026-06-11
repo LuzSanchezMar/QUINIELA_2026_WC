@@ -249,7 +249,7 @@ export default function QuinielaClient({ view = "player" }) {
                 </div>
               </form>
 
-              <div className="notice">Entra o crea tu cuenta para guardar tus marcadores. Maximo 10 participantes.</div>
+              <div className="notice">Entra o crea tu cuenta para guardar tus marcadores.</div>
             </>
           )}
           <section className="rules-panel" aria-label="Sistema de puntos">

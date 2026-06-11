@@ -46,7 +46,6 @@ async function mutate(state, action, payload, request) {
     requireName(name);
     requirePassword(payload.password);
     if (state.players[name]?.passwordHash) throw new Error("Ese nombre ya esta registrado");
-    if (!state.players[name] && Object.keys(state.players).length >= 10) throw new Error("La quiniela ya tiene 10 participantes");
     const password = await hashPassword(payload.password);
     state.players[name] = {
       ...(state.players[name] || {}),

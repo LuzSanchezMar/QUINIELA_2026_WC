@@ -34,7 +34,7 @@ La vista publica de posiciones esta en `http://localhost:3000/posiciones`.
 
 ## Registro de participantes
 
-Cada participante crea una cuenta con nombre y contrasena desde la pagina principal. La app permite hasta 10 participantes.
+Cada participante crea una cuenta con nombre y contrasena desde la pagina principal.
 
 La contrasena no se guarda en texto plano. El servidor guarda un `passwordHash` y un `passwordSalt` dentro del estado persistido. Al iniciar sesion, el servidor devuelve un token firmado que el navegador guarda en `sessionStorage` y usa para autorizar pronosticos.
 
