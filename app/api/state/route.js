@@ -65,7 +65,7 @@ function mutate(state, action, payload, adminPin) {
   }
 
   if (action === "result") {
-    const expectedPin = process.env.ADMIN_PIN || "1234";
+    const expectedPin = process.env.ADMIN_PIN || "180799";
     if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
     requireScore(payload.home, payload.away);
     state.results[payload.matchId] = {

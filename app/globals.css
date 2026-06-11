@@ -460,6 +460,35 @@ label {
   position: relative;
 }
 
+.prize-banner {
+  align-items: center;
+  background: var(--primary);
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin-bottom: 16px;
+  padding: 16px;
+  text-align: center;
+}
+
+.prize-banner span {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.prize-banner strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.prize-banner small {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
+}
+
 .podium {
   align-items: end;
   display: grid;
@@ -594,6 +623,11 @@ label {
 
 .admin-login {
   margin-bottom: 12px;
+}
+
+.admin-gate {
+  margin: 0 auto;
+  max-width: 440px;
 }
 
 .admin-card .match-meta {

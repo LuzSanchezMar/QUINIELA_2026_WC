@@ -42,7 +42,7 @@ La vista publica de posiciones esta en `http://localhost:3000/posiciones`.
 ```text
 KV_REST_API_URL=...
 KV_REST_API_TOKEN=...
-ADMIN_PIN=1234
+ADMIN_PIN=180799
 ```
 
 5. Despliega. Comparte la URL con familiares y amigos.

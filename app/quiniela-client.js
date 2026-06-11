@@ -45,6 +45,8 @@ export default function QuinielaClient({ view = "player" }) {
       .sort((a, b) => b.points - a.points || b.picks - a.picks || a.name.localeCompare(b.name));
   }, [state]);
 
+  const prizeAmount = Object.keys(state.players).length * 100;
+
   async function apiFetch(options) {
     const response = await fetch("/api/state", {
       headers: { "Content-Type": "application/json" },
@@ -138,6 +140,8 @@ export default function QuinielaClient({ view = "player" }) {
     sessionStorage.setItem(adminKey, pin);
   }
 
+  const adminUnlocked = view !== "admin" || adminPin === "180799";
+
   return (
     <>
       <header className="app-header">
@@ -228,6 +232,7 @@ export default function QuinielaClient({ view = "player" }) {
               </div>
             </div>
             {view === "standings" && <Podium rows={leaderboard} />}
+            {view === "standings" && <PrizeBanner amount={prizeAmount} players={Object.keys(state.players).length} />}
             <div className="leaderboard">
               {leaderboard.length ? (
                 leaderboard.map((row, index) => (
@@ -255,30 +260,30 @@ export default function QuinielaClient({ view = "player" }) {
                 <h2 id="adminTitle">Resultados</h2>
               </div>
             </div>
-            <form className="admin-login" onSubmit={handleAdminSubmit}>
-              <label htmlFor="adminPin">PIN</label>
-              <div className="inline-fields">
-                <input
-                  id="adminPin"
-                  name="adminPin"
-                  type="password"
-                  inputMode="numeric"
-                  placeholder="1234"
-                  value={adminInput}
-                  onChange={(event) => setAdminInput(event.target.value)}
-                />
-                <button type="submit">Abrir</button>
-              </div>
-            </form>
-            <div className="admin-results">
-              {adminPin ? (
-                matches.map((match) => (
+            {!adminUnlocked ? (
+              <form className="admin-login admin-gate" onSubmit={handleAdminSubmit}>
+                <label htmlFor="adminPin">PIN de administrador</label>
+                <div className="inline-fields">
+                  <input
+                    id="adminPin"
+                    name="adminPin"
+                    type="password"
+                    inputMode="numeric"
+                    value={adminInput}
+                    onChange={(event) => setAdminInput(event.target.value)}
+                    autoFocus
+                  />
+                  <button type="submit">Entrar</button>
+                </div>
+                {adminPin && <div className="empty-state">PIN incorrecto.</div>}
+              </form>
+            ) : (
+              <div className="admin-results">
+                {matches.map((match) => (
                   <AdminCard key={match.id} match={match} result={state.results[match.id]} onSave={saveResult} />
-                ))
-              ) : (
-                <div className="empty-state">Ingresa el PIN para capturar marcadores reales.</div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
           )}
         </aside>
@@ -421,6 +426,24 @@ function Podium({ rows }) {
   );
 }
 
+function PrizeBanner({ amount, players }) {
+  return (
+    <div className="prize-banner" aria-label="Premio acumulado">
+      <span>Premio a ganar</span>
+      <strong>{formatCurrency(amount)}</strong>
+      <small>{players} participante{players === 1 ? "" : "s"} x $100</small>
+    </div>
+  );
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0
+  }).format(value);
+}
+
 function normalizeName(name) {
   return name.trim().replace(/\s+/g, " ");
 }
@@ -510,7 +533,7 @@ function applyMutation(state, action, payload, adminPin) {
   }
 
   if (action === "result") {
-    if (adminPin !== "1234") throw new Error("PIN incorrecto en modo local");
+    if (adminPin !== "180799") throw new Error("PIN incorrecto en modo local");
     state.results[payload.matchId] = {
       home: Number(payload.home),
       away: Number(payload.away),
