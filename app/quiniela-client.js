@@ -493,6 +493,8 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
   const loginRequired = !canSave;
   const locked = hasMatchStarted(match) || teamsPending || loginRequired;
   const predictedDraw = home !== "" && away !== "" && Number(home) === Number(away);
+  const showPenaltySelector = predictedDraw && !locked;
+  const saveButtonText = loginRequired ? "Inicia sesión" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar";
 
   function handleSave() {
     if (!canSave || locked || home === "" || away === "") return;
@@ -531,17 +533,24 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
             onChange={(event) => setAway(event.target.value)}
           />
         </label>
-        <button className="save-pick" type="button" onClick={handleSave} disabled={locked}>
-          {loginRequired ? "Inicia sesión" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
-        </button>
+        {!showPenaltySelector && (
+          <button className="save-pick" type="button" onClick={handleSave} disabled={locked}>
+            {saveButtonText}
+          </button>
+        )}
       </div>
-      {predictedDraw && !locked && (
-        <PenaltySelector
-          label="Si empatan, ¿quién clasifica por penales?"
-          match={match}
-          value={advances}
-          onChange={setAdvances}
-        />
+      {showPenaltySelector && (
+        <>
+          <PenaltySelector
+            label="Si empatan, ¿quién clasifica por penales?"
+            match={match}
+            value={advances}
+            onChange={setAdvances}
+          />
+          <button className="save-pick save-pick-after-penalties" type="button" onClick={handleSave}>
+            {saveButtonText}
+          </button>
+        </>
       )}
       <div className="result-line">
         {result
