@@ -11,7 +11,12 @@ const adminKey = "quiniela-2026-admin-pin";
 const emptyState = {
   players: {},
   predictions: {},
-  results: {}
+  results: {},
+  matches: [],
+  meta: {
+    phase: "groups",
+    previousWinner: null
+  }
 };
 
 export default function QuinielaClient({ view = "player" }) {
@@ -24,6 +29,7 @@ export default function QuinielaClient({ view = "player" }) {
   const [adminInput, setAdminInput] = useState("");
   const [status, setStatus] = useState({ text: "Iniciando", mode: "" });
   const [usingApi, setUsingApi] = useState(true);
+  const activeMatches = useMemo(() => getActiveMatches(state), [state]);
 
   useEffect(() => {
     const savedPlayer = localStorage.getItem(nameKey) || "";
@@ -48,14 +54,16 @@ export default function QuinielaClient({ view = "player" }) {
         const picks = state.predictions[name] || {};
         return {
           name,
-          points: playerScore(name, state),
+          points: playerScore(name, state, activeMatches),
           picks: Object.keys(picks).length
         };
       })
       .sort((a, b) => b.points - a.points || b.picks - a.picks || a.name.localeCompare(b.name));
-  }, [state]);
+  }, [state, activeMatches]);
 
   const prizeAmount = Object.keys(state.players).length * 100;
+  const currentSessionActive = Boolean(currentPlayer && playerSession?.token && state.players[currentPlayer]);
+  const previousWinner = state.meta?.previousWinner;
 
   async function apiFetch(options = {}) {
     const { headers: optionHeaders, ...rest } = options;
@@ -114,8 +122,16 @@ export default function QuinielaClient({ view = "player" }) {
   }
 
   async function saveResult(matchId, home, away) {
+    return saveAdminAction("result", { matchId, home, away });
+  }
+
+  async function saveMatchTeams(matchId, home, away) {
+    return saveAdminAction("match", { matchId, home, away });
+  }
+
+  async function saveAdminAction(action, payload) {
     if (!usingApi) {
-      return saveState("result", { matchId, home, away });
+      return saveState(action, payload);
     }
 
     setStatus({ text: "Guardando", mode: "loading" });
@@ -126,7 +142,7 @@ export default function QuinielaClient({ view = "player" }) {
           "Content-Type": "application/json",
           "X-Admin-Pin": adminPin
         },
-        body: JSON.stringify({ action: "result", payload: { matchId, home, away } })
+        body: JSON.stringify({ action, payload })
       });
       setState(normalizeState(data.state));
       setStatus({ text: "En linea", mode: "online" });
@@ -165,6 +181,10 @@ export default function QuinielaClient({ view = "player" }) {
     setCurrentPlayer("");
     setPlayerSession(null);
     sessionStorage.removeItem(sessionKey);
+  }
+
+  async function handleCloseQuiniela(winnerName) {
+    await saveAdminAction("close-current", { winnerName });
   }
 
   function handleAdminSubmit(event) {
@@ -216,8 +236,17 @@ export default function QuinielaClient({ view = "player" }) {
 
           {currentPlayer && playerSession?.token ? (
             <div className="session-bar">
-              <span>Jugando como <strong>{currentPlayer}</strong></span>
-              <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Salir</button>
+              {currentSessionActive ? (
+                <>
+                  <span>Jugando como <strong>{currentPlayer}</strong></span>
+                  <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Salir</button>
+                </>
+              ) : (
+                <>
+                  <span>Tu cuenta anterior pertenece a la quiniela cerrada.</span>
+                  <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Entrar de nuevo</button>
+                </>
+              )}
             </div>
           ) : (
             <>
@@ -255,6 +284,7 @@ export default function QuinielaClient({ view = "player" }) {
               <div className="notice">Entra o crea tu cuenta para guardar tus marcadores.</div>
             </>
           )}
+          {previousWinner && <WinnerBanner winner={previousWinner} />}
           <section className="rules-panel" aria-label="Sistema de puntos">
             <h3>Sistema de puntos</h3>
             <div className="rules-grid">
@@ -264,14 +294,14 @@ export default function QuinielaClient({ view = "player" }) {
             </div>
           </section>
           <div className="match-list">
-            {matches.map((match) => (
+            {activeMatches.map((match) => (
               <MatchCard
                 key={match.id}
                 match={match}
                 pick={(state.predictions[currentPlayer] || {})[match.id]}
                 result={state.results[match.id]}
                 onSave={(home, away) => saveState("prediction", { name: currentPlayer, matchId: match.id, home, away })}
-                canSave={Boolean(currentPlayer && playerSession?.token)}
+                canSave={currentSessionActive}
               />
             ))}
           </div>
@@ -287,6 +317,7 @@ export default function QuinielaClient({ view = "player" }) {
                 <h2 id="leaderboardTitle">Posiciones</h2>
               </div>
             </div>
+            {previousWinner && <WinnerBanner winner={previousWinner} />}
             {view === "standings" && <Podium rows={leaderboard} />}
             {view === "standings" && <PrizeBanner amount={prizeAmount} players={Object.keys(state.players).length} />}
             <div className="leaderboard">
@@ -334,11 +365,26 @@ export default function QuinielaClient({ view = "player" }) {
                 {adminPin && <div className="empty-state">PIN incorrecto.</div>}
               </form>
             ) : (
-              <div className="admin-results">
-                {matches.map((match) => (
-                  <AdminCard key={match.id} match={match} result={state.results[match.id]} onSave={saveResult} />
-                ))}
-              </div>
+              <>
+                <AdminQuinielaControl
+                  phase={state.meta?.phase}
+                  winner={previousWinner}
+                  leaderboard={leaderboard}
+                  onClose={handleCloseQuiniela}
+                />
+                <div className="admin-results">
+                  {activeMatches.map((match) => (
+                    <AdminCard
+                      key={match.id}
+                      match={match}
+                      result={state.results[match.id]}
+                      canEditTeams={state.meta?.phase === "knockout"}
+                      onSave={saveResult}
+                      onSaveTeams={saveMatchTeams}
+                    />
+                  ))}
+                </div>
+              </>
             )}
           </section>
           )}
@@ -413,24 +459,103 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
   );
 }
 
-function AdminCard({ match, result, onSave }) {
+function AdminQuinielaControl({ phase, winner, leaderboard, onClose }) {
+  const leader = leaderboard[0];
+  const [winnerName, setWinnerName] = useState("");
+
+  useEffect(() => {
+    setWinnerName(leader?.name || "");
+  }, [leader?.name]);
+
+  function handleClose() {
+    const name = normalizeName(winnerName || leader?.name || "");
+    if (!name) return;
+    onClose(name);
+  }
+
+  return (
+    <section className="admin-control" aria-label="Control de quiniela">
+      <div>
+        <h3>{phase === "knockout" ? "Quiniela de eliminatoria activa" : "Cerrar quiniela actual"}</h3>
+        <p className="empty-state">
+          {phase === "knockout"
+            ? "Ya puedes capturar manualmente los cruces de octavos a la final."
+            : "Guarda el ganador actual e inicia una nueva quiniela desde octavos."}
+        </p>
+      </div>
+      {winner ? (
+        <WinnerBanner winner={winner} compact />
+      ) : (
+        <div className="close-quiniela-form">
+          <label htmlFor="winnerName">Ganador de esta quiniela</label>
+          <div className="inline-fields">
+            <input
+              id="winnerName"
+              value={winnerName}
+              onChange={(event) => setWinnerName(event.target.value)}
+              placeholder="Nombre del ganador"
+            />
+            <button type="button" onClick={handleClose}>Cerrar e iniciar octavos</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function WinnerBanner({ winner, compact = false }) {
+  return (
+    <div className={compact ? "winner-banner winner-banner-compact" : "winner-banner"}>
+      <span>Ganador quiniela anterior</span>
+      <strong>{winner.name}</strong>
+      <small>{winner.points} pts</small>
+    </div>
+  );
+}
+
+function AdminCard({ match, result, canEditTeams, onSave, onSaveTeams }) {
   const [home, setHome] = useState("");
   const [away, setAway] = useState("");
+  const [homeTeam, setHomeTeam] = useState("");
+  const [awayTeam, setAwayTeam] = useState("");
 
   useEffect(() => {
     setHome(result ? result.home : "");
     setAway(result ? result.away : "");
   }, [result]);
 
+  useEffect(() => {
+    setHomeTeam(match.home || "");
+    setAwayTeam(match.away || "");
+  }, [match.home, match.away]);
+
   function handleSave() {
     if (home === "" || away === "") return;
     onSave(match.id, home, away);
+  }
+
+  function handleSaveTeams() {
+    if (!canEditTeams || !homeTeam.trim() || !awayTeam.trim()) return;
+    onSaveTeams(match.id, homeTeam, awayTeam);
   }
 
   return (
     <article className="admin-card">
       <h3><span className="flag-icon">{flagForTeam(match.home)}</span>{match.home} vs <span className="flag-icon">{flagForTeam(match.away)}</span>{match.away}</h3>
       <div className="match-meta">{`${match.group} | ${formatMatchDate(match.date)}`}</div>
+      {canEditTeams && (
+        <div className="admin-teams-row">
+          <label>
+            Equipo local
+            <input value={homeTeam} onChange={(event) => setHomeTeam(event.target.value)} />
+          </label>
+          <label>
+            Equipo visitante
+            <input value={awayTeam} onChange={(event) => setAwayTeam(event.target.value)} />
+          </label>
+          <button type="button" onClick={handleSaveTeams}>Guardar equipos</button>
+        </div>
+      )}
       <div className="admin-score-row">
         <input
           type="number"
@@ -534,9 +659,9 @@ function scorePrediction(prediction, result) {
   return 0;
 }
 
-function playerScore(name, state) {
+function playerScore(name, state, matchList) {
   const picks = state.predictions[name] || {};
-  return matches.reduce((total, match) => total + scorePrediction(picks[match.id], state.results[match.id]), 0);
+  return matchList.reduce((total, match) => total + scorePrediction(picks[match.id], state.results[match.id]), 0);
 }
 
 function hydrateLocal() {
@@ -556,7 +681,12 @@ function normalizeState(state) {
   return {
     players: state?.players || {},
     predictions: state?.predictions || {},
-    results: state?.results || {}
+    results: state?.results || {},
+    matches: Array.isArray(state?.matches) ? state.matches : [],
+    meta: {
+      phase: state?.meta?.phase || "groups",
+      previousWinner: state?.meta?.previousWinner || null
+    }
   };
 }
 
@@ -564,7 +694,9 @@ function mergeState(apiState, localState) {
   return {
     players: { ...(apiState?.players || {}), ...(localState?.players || {}) },
     predictions: { ...(apiState?.predictions || {}), ...(localState?.predictions || {}) },
-    results: { ...(apiState?.results || {}), ...(localState?.results || {}) }
+    results: { ...(apiState?.results || {}), ...(localState?.results || {}) },
+    matches: localState?.matches?.length ? localState.matches : apiState?.matches || [],
+    meta: { ...(apiState?.meta || {}), ...(localState?.meta || {}) }
   };
 }
 
@@ -575,7 +707,7 @@ function applyMutation(state, action, payload, adminPin) {
   }
 
   if (action === "prediction") {
-    const match = matches.find((item) => item.id === payload.matchId);
+    const match = getActiveMatches(state).find((item) => item.id === payload.matchId);
     if (!match) throw new Error("Partido no valido");
     if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
     if (hasMatchStarted(match)) throw new Error("El partido ya empezo");
@@ -596,8 +728,58 @@ function applyMutation(state, action, payload, adminPin) {
       updatedAt: new Date().toISOString()
     };
   }
+
+  if (action === "match") {
+    if (adminPin !== "180799") throw new Error("PIN incorrecto en modo local");
+    updateMatchTeams(state, payload);
+  }
+
+  if (action === "close-current") {
+    if (adminPin !== "180799") throw new Error("PIN incorrecto en modo local");
+    const winnerName = normalizeName(payload.winnerName || "");
+    if (!winnerName) throw new Error("Ganador invalido");
+    const winnerPoints = playerScore(winnerName, state, getActiveMatches(state));
+    state.players = {};
+    state.predictions = {};
+    state.results = {};
+    state.matches = createKnockoutMatches();
+    state.meta = {
+      phase: "knockout",
+      previousWinner: {
+        name: winnerName,
+        points: winnerPoints,
+        closedAt: new Date().toISOString()
+      }
+    };
+  }
 }
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function getActiveMatches(state) {
+  if (state?.meta?.phase === "knockout") {
+    return state.matches?.length ? state.matches : createKnockoutMatches();
+  }
+  return matches;
+}
+
+function createKnockoutMatches() {
+  return matches
+    .filter((match) => !match.group.startsWith("Grupo"))
+    .map((match) => ({ ...match }));
+}
+
+function updateMatchTeams(state, payload) {
+  const matchList = state.matches?.length ? state.matches : createKnockoutMatches();
+  const match = matchList.find((item) => item.id === payload.matchId);
+  if (!match) throw new Error("Partido no valido");
+  const home = normalizeName(payload.home || "");
+  const away = normalizeName(payload.away || "");
+  if (!home || !away) throw new Error("Equipos invalidos");
+  match.home = home;
+  match.away = away;
+  match.teamsConfirmed = true;
+  state.matches = matchList;
 }

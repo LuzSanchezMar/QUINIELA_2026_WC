@@ -3,14 +3,19 @@ import { matches } from "../../../lib/matches";
 const initialState = {
   players: {},
   predictions: {},
-  results: {}
+  results: {},
+  matches: [],
+  meta: {
+    phase: "groups",
+    previousWinner: null
+  }
 };
 
 const key = "quiniela-2026-state";
 globalThis.__quinielaMemoryState = globalThis.__quinielaMemoryState || clone(initialState);
 
 export async function GET() {
-  const state = await readState();
+  const state = normalizeState(await readState());
   const synced = await syncRealResults(state);
   if (synced) await writeState(state);
   return json({ state: publicState(state), storage: hasKv() ? "kv" : "memory" });
@@ -20,7 +25,7 @@ export async function POST(request) {
   const body = await request.json().catch(() => ({}));
   const action = body.action;
   const payload = body.payload || {};
-  const state = await readState();
+  const state = normalizeState(await readState());
 
   try {
     const result = await mutate(state, action, payload, request);
@@ -74,7 +79,7 @@ async function mutate(state, action, payload, request) {
     const name = normalizeName(session.name);
     requireName(name);
     requireScore(payload.home, payload.away);
-    requireOpenMatch(payload.matchId);
+    requireOpenMatch(state, payload.matchId);
     if (!state.players[name]) throw new Error("Participante no registrado");
     state.predictions[name] = state.predictions[name] || {};
     state.predictions[name][payload.matchId] = {
@@ -94,6 +99,36 @@ async function mutate(state, action, payload, request) {
       home: Number(payload.home),
       away: Number(payload.away),
       updatedAt: new Date().toISOString()
+    };
+    return;
+  }
+
+  if (action === "match") {
+    const adminPin = request.headers.get("x-admin-pin");
+    const expectedPin = process.env.ADMIN_PIN || "180799";
+    if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
+    updateMatchTeams(state, payload);
+    return;
+  }
+
+  if (action === "close-current") {
+    const adminPin = request.headers.get("x-admin-pin");
+    const expectedPin = process.env.ADMIN_PIN || "180799";
+    if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
+    const winnerName = normalizeName(payload.winnerName);
+    requireName(winnerName);
+    const winnerPoints = playerScore(winnerName, state, getActiveMatches(state));
+    state.players = {};
+    state.predictions = {};
+    state.results = {};
+    state.matches = createKnockoutMatches();
+    state.meta = {
+      phase: "knockout",
+      previousWinner: {
+        name: winnerName,
+        points: winnerPoints,
+        closedAt: new Date().toISOString()
+      }
     };
     return;
   }
@@ -122,8 +157,8 @@ function requirePassword(password) {
   }
 }
 
-function requireOpenMatch(matchId) {
-  const match = matches.find((item) => item.id === matchId);
+function requireOpenMatch(state, matchId) {
+  const match = getActiveMatches(state).find((item) => item.id === matchId);
   if (!match) throw new Error("Partido no valido");
   if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
   if (Date.now() >= new Date(match.date).getTime()) throw new Error("El partido ya empezo");
@@ -145,7 +180,9 @@ function publicState(state) {
       ])
     ),
     predictions: state.predictions || {},
-    results: state.results || {}
+    results: state.results || {},
+    matches: state.matches || [],
+    meta: state.meta || initialState.meta
   };
 }
 
@@ -210,7 +247,7 @@ async function syncRealResults(state) {
       const finished = item.finished === true || ["finished", "final", "ft", "full_time"].includes(status);
 
       if (!finished || !matchId || home === undefined || away === undefined) continue;
-      const match = matches.find((entry) => entry.id === matchId);
+      const match = getActiveMatches(state).find((entry) => entry.id === matchId);
       if (!match) continue;
       requireScore(home, away);
 
@@ -230,6 +267,70 @@ async function syncRealResults(state) {
   } catch {
     return false;
   }
+}
+
+function normalizeState(state) {
+  return {
+    players: state?.players || {},
+    predictions: state?.predictions || {},
+    results: state?.results || {},
+    matches: Array.isArray(state?.matches) ? state.matches : [],
+    meta: {
+      phase: state?.meta?.phase || "groups",
+      previousWinner: state?.meta?.previousWinner || null
+    }
+  };
+}
+
+function getActiveMatches(state) {
+  if (state?.meta?.phase === "knockout") {
+    return state.matches?.length ? state.matches : createKnockoutMatches();
+  }
+  return matches;
+}
+
+function createKnockoutMatches() {
+  return matches
+    .filter((match) => !match.group.startsWith("Grupo"))
+    .map((match) => ({ ...match }));
+}
+
+function updateMatchTeams(state, payload) {
+  const matchList = state.matches?.length ? state.matches : createKnockoutMatches();
+  const match = matchList.find((item) => item.id === payload.matchId);
+  if (!match) throw new Error("Partido no valido");
+  const home = normalizeName(payload.home);
+  const away = normalizeName(payload.away);
+  requireName(home);
+  requireName(away);
+  match.home = home;
+  match.away = away;
+  match.teamsConfirmed = true;
+  state.matches = matchList;
+}
+
+function playerScore(name, state, matchList) {
+  const picks = state.predictions[name] || {};
+  return matchList.reduce((total, match) => total + scorePrediction(picks[match.id], state.results[match.id]), 0);
+}
+
+function scorePrediction(prediction, result) {
+  if (!prediction || !result) return 0;
+  const pickHome = Number(prediction.home);
+  const pickAway = Number(prediction.away);
+  const realHome = Number(result.home);
+  const realAway = Number(result.away);
+
+  if (pickHome === realHome && pickAway === realAway) return 3;
+  if (winner(prediction) === winner(result)) return 1;
+  return 0;
+}
+
+function winner(score) {
+  if (!score) return null;
+  if (Number(score.home) > Number(score.away)) return "home";
+  if (Number(score.home) < Number(score.away)) return "away";
+  return "draw";
 }
 
 function clone(value) {
