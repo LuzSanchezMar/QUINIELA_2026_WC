@@ -101,6 +101,9 @@ export default function QuinielaClient({ view = "player" }) {
           persistLocal(next);
           return next;
         });
+        if (action === "prediction") {
+          setStatus({ text: "Pronostico guardado", mode: "online" });
+        }
       } catch (error) {
         setStatus({ text: error.message, mode: "error" });
       }
@@ -115,7 +118,7 @@ export default function QuinielaClient({ view = "player" }) {
         body: JSON.stringify({ action, payload })
       });
       setState(normalizeState(data.state));
-      setStatus({ text: "En linea", mode: "online" });
+      setStatus({ text: action === "prediction" ? "Pronostico guardado" : "En linea", mode: "online" });
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
     }
@@ -404,7 +407,8 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
   }, [pick]);
 
   const teamsPending = match.teamsConfirmed === false;
-  const locked = hasMatchStarted(match) || teamsPending;
+  const loginRequired = !canSave;
+  const locked = hasMatchStarted(match) || teamsPending || loginRequired;
 
   function handleSave() {
     if (!canSave || locked || home === "" || away === "") return;
@@ -443,12 +447,14 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
           />
         </label>
         <button className="save-pick" type="button" onClick={handleSave} disabled={locked}>
-          {teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
+          {loginRequired ? "Inicia sesion" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
         </button>
       </div>
       <div className="result-line">
         {result
           ? `Resultado: ${result.home}-${result.away} | Tus puntos: ${scorePrediction(pick, result)}`
+          : loginRequired
+            ? "Debes iniciar sesion antes de meter pronosticos."
           : teamsPending
             ? "Equipos por definir. Pronostico pendiente"
           : locked
