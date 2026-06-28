@@ -361,7 +361,7 @@ export default function QuinielaClient({ view = "player" }) {
               <span><strong>+1 pt</strong> clasificado por penales correcto</span>
               <span><strong>0 pts</strong> sin coincidencia</span>
             </div>
-            <p className="rules-note">Si el partido se va a penales, cuenta el equipo que clasifica. Máximo por partido: 4 pts.</p>
+            <p className="rules-note">Máximo por partido: 4 pts.</p>
           </section>
           <div className="match-list">
             {activeMatches.map((match) => (
