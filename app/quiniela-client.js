@@ -357,7 +357,7 @@ export default function QuinielaClient({ view = "player" }) {
             <h3>Sistema de puntos</h3>
             <div className="rules-grid">
               <span><strong>3 pts</strong> marcador exacto</span>
-              <span><strong>1 pt</strong> ganador, clasificado o empate correcto</span>
+              <span><strong>1 pt</strong> solo ganador, clasificado o empate correcto</span>
               <span><strong>+1 pt</strong> clasificado por penales correcto</span>
               <span><strong>0 pts</strong> sin coincidencia</span>
             </div>
