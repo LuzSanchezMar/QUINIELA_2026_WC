@@ -90,6 +90,7 @@ async function mutate(state, action, payload, request) {
     state.predictions[name][payload.matchId] = {
       home: Number(payload.home),
       away: Number(payload.away),
+      advances: normalizeAdvances(payload.advances, payload.home, payload.away),
       updatedAt: new Date().toISOString()
     };
     return;
@@ -101,6 +102,7 @@ async function mutate(state, action, payload, request) {
     state.results[payload.matchId] = {
       home: Number(payload.home),
       away: Number(payload.away),
+      advances: normalizeAdvances(payload.advances, payload.home, payload.away),
       updatedAt: new Date().toISOString()
     };
     return;
@@ -273,13 +275,15 @@ async function syncRealResults(state) {
 }
 
 function normalizeState(state) {
+  const phase = state?.meta?.phase || "groups";
+  const stateMatches = Array.isArray(state?.matches) ? state.matches : [];
   return {
     players: state?.players || {},
     predictions: state?.predictions || {},
     results: state?.results || {},
-    matches: Array.isArray(state?.matches) ? state.matches : [],
+    matches: phase === "knockout" ? reconcileKnockoutMatches(stateMatches) : stateMatches,
     meta: {
-      phase: state?.meta?.phase || "groups",
+      phase,
       previousWinner: state?.meta?.previousWinner || null
     }
   };
@@ -298,6 +302,20 @@ function createKnockoutMatches() {
     .map((match) => ({ ...match }));
 }
 
+function reconcileKnockoutMatches(stateMatches) {
+  const officialMatches = createKnockoutMatches();
+  return officialMatches.map((match) => {
+    const savedMatch = stateMatches.find((item) => item.id === match.id);
+    if (!savedMatch) return match;
+    return {
+      ...match,
+      home: savedMatch.home || match.home,
+      away: savedMatch.away || match.away,
+      teamsConfirmed: savedMatch.teamsConfirmed ?? match.teamsConfirmed
+    };
+  });
+}
+
 function updateMatchTeams(state, payload) {
   const matchList = state.matches?.length ? state.matches : createKnockoutMatches();
   const match = matchList.find((item) => item.id === payload.matchId);
@@ -312,6 +330,12 @@ function updateMatchTeams(state, payload) {
   state.matches = matchList;
 }
 
+function normalizeAdvances(advances, home, away) {
+  if (Number(home) !== Number(away)) return null;
+  if (advances !== "home" && advances !== "away") throw new Error("Selecciona quién clasifica por penales");
+  return advances;
+}
+
 function playerScore(name, state, matchList) {
   const picks = state.predictions[name] || {};
   return matchList.reduce((total, match) => total + scorePrediction(picks[match.id], state.results[match.id]), 0);
@@ -323,10 +347,19 @@ function scorePrediction(prediction, result) {
   const pickAway = Number(prediction.away);
   const realHome = Number(result.home);
   const realAway = Number(result.away);
+  let points = 0;
 
-  if (pickHome === realHome && pickAway === realAway) return 3;
-  if (winner(prediction) === winner(result)) return 1;
-  return 0;
+  if (pickHome === realHome && pickAway === realAway) {
+    points = 3;
+  } else if (winner(prediction) === winner(result)) {
+    points = 1;
+  }
+
+  if (pickHome === pickAway && realHome === realAway && prediction.advances && prediction.advances === result.advances) {
+    points += 1;
+  }
+
+  return points;
 }
 
 function winner(score) {

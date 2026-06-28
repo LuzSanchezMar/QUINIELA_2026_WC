@@ -139,18 +139,18 @@ export default function QuinielaClient({ view = "player" }) {
     }
   }
 
-  async function savePrediction(match, home, away) {
-    const saved = await saveState("prediction", { name: currentPlayer, matchId: match.id, home, away });
+  async function savePrediction(match, home, away, advances) {
+    const saved = await saveState("prediction", { name: currentPlayer, matchId: match.id, home, away, advances });
     if (!saved) return;
     setToast({
       title: "Pronóstico guardado",
-      message: `${match.home} ${home}-${away} ${match.away}`,
+      message: `${match.home} ${home}-${away} ${match.away}${advances ? ` | Clasifica ${teamNameBySide(match, advances)}` : ""}`,
       detail: "Guardado exitosamente."
     });
   }
 
-  async function saveResult(matchId, home, away) {
-    return saveAdminAction("result", { matchId, home, away });
+  async function saveResult(matchId, home, away, advances) {
+    return saveAdminAction("result", { matchId, home, away, advances });
   }
 
   async function saveMatchTeams(matchId, home, away) {
@@ -358,6 +358,7 @@ export default function QuinielaClient({ view = "player" }) {
             <div className="rules-grid">
               <span><strong>3 pts</strong> marcador exacto</span>
               <span><strong>1 pt</strong> ganador o empate correcto</span>
+              <span><strong>+1 pt</strong> clasificado por penales correcto</span>
               <span><strong>0 pts</strong> sin coincidencia</span>
             </div>
           </section>
@@ -368,7 +369,7 @@ export default function QuinielaClient({ view = "player" }) {
                 match={match}
                 pick={(state.predictions[currentPlayer] || {})[match.id]}
                 result={state.results[match.id]}
-                onSave={(home, away) => savePrediction(match, home, away)}
+                onSave={(home, away, advances) => savePrediction(match, home, away, advances)}
                 canSave={currentSessionActive}
               />
             ))}
@@ -480,19 +481,23 @@ export default function QuinielaClient({ view = "player" }) {
 function MatchCard({ match, pick, result, onSave, canSave }) {
   const [home, setHome] = useState("");
   const [away, setAway] = useState("");
+  const [advances, setAdvances] = useState("");
 
   useEffect(() => {
     setHome(pick ? pick.home : "");
     setAway(pick ? pick.away : "");
+    setAdvances(pick?.advances || "");
   }, [pick]);
 
   const teamsPending = match.teamsConfirmed === false;
   const loginRequired = !canSave;
   const locked = hasMatchStarted(match) || teamsPending || loginRequired;
+  const predictedDraw = home !== "" && away !== "" && Number(home) === Number(away);
 
   function handleSave() {
     if (!canSave || locked || home === "" || away === "") return;
-    onSave(home, away);
+    if (predictedDraw && !advances) return;
+    onSave(home, away, predictedDraw ? advances : "");
   }
 
   return (
@@ -530,9 +535,19 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
           {loginRequired ? "Inicia sesión" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
         </button>
       </div>
+      {predictedDraw && !locked && (
+        <PenaltySelector
+          label="Si empatan, ¿quién clasifica por penales?"
+          match={match}
+          value={advances}
+          onChange={setAdvances}
+        />
+      )}
       <div className="result-line">
         {result
-          ? `Resultado: ${result.home}-${result.away} | Tus puntos: ${scorePrediction(pick, result)}`
+          ? `Resultado: ${result.home}-${result.away}${result.advances ? ` | Clasificó ${teamNameBySide(match, result.advances)} por penales` : ""} | Tus puntos: ${scorePrediction(pick, result)}`
+          : predictedDraw && !advances && !locked
+            ? "Selecciona quién clasifica por penales para guardar este empate."
           : loginRequired
             ? "Debes iniciar sesión antes de meter pronósticos."
           : teamsPending
@@ -565,8 +580,8 @@ function AdminQuinielaControl({ phase, winner, leaderboard, onClose }) {
         <h3>{phase === "knockout" ? "Quiniela de eliminatoria activa" : "Cerrar quiniela actual"}</h3>
         <p className="empty-state">
           {phase === "knockout"
-            ? "Ya puedes capturar manualmente los cruces de octavos a la final."
-            : "Guarda el ganador actual e inicia una nueva quiniela desde octavos."}
+            ? "Ya puedes capturar manualmente los cruces de la eliminatoria a la final."
+            : "Guarda el ganador actual e inicia una nueva quiniela desde la fase eliminatoria."}
         </p>
       </div>
       {winner ? (
@@ -581,7 +596,7 @@ function AdminQuinielaControl({ phase, winner, leaderboard, onClose }) {
               onChange={(event) => setWinnerName(event.target.value)}
               placeholder="Nombre del ganador"
             />
-            <button type="button" onClick={handleClose}>Cerrar e iniciar octavos</button>
+            <button type="button" onClick={handleClose}>Cerrar e iniciar eliminatoria</button>
           </div>
         </div>
       )}
@@ -602,12 +617,14 @@ function WinnerBanner({ winner, compact = false }) {
 function AdminCard({ match, result, canEditTeams, onSave, onSaveTeams }) {
   const [home, setHome] = useState("");
   const [away, setAway] = useState("");
+  const [advances, setAdvances] = useState("");
   const [homeTeam, setHomeTeam] = useState("");
   const [awayTeam, setAwayTeam] = useState("");
 
   useEffect(() => {
     setHome(result ? result.home : "");
     setAway(result ? result.away : "");
+    setAdvances(result?.advances || "");
   }, [result]);
 
   useEffect(() => {
@@ -617,13 +634,16 @@ function AdminCard({ match, result, canEditTeams, onSave, onSaveTeams }) {
 
   function handleSave() {
     if (home === "" || away === "") return;
-    onSave(match.id, home, away);
+    if (resultDraw && !advances) return;
+    onSave(match.id, home, away, resultDraw ? advances : "");
   }
 
   function handleSaveTeams() {
     if (!canEditTeams || !homeTeam.trim() || !awayTeam.trim()) return;
     onSaveTeams(match.id, homeTeam, awayTeam);
   }
+
+  const resultDraw = home !== "" && away !== "" && Number(home) === Number(away);
 
   return (
     <article className="admin-card">
@@ -664,7 +684,46 @@ function AdminCard({ match, result, canEditTeams, onSave, onSaveTeams }) {
         />
         <button type="button" onClick={handleSave}>Guardar</button>
       </div>
+      {resultDraw && (
+        <>
+          <PenaltySelector
+            label="Clasificado por penales"
+            match={match}
+            value={advances}
+            onChange={setAdvances}
+          />
+          {!advances && <div className="result-line">Selecciona quién clasificó por penales para guardar este empate.</div>}
+        </>
+      )}
     </article>
+  );
+}
+
+function PenaltySelector({ label, match, value, onChange }) {
+  return (
+    <fieldset className="penalty-selector">
+      <legend>{label}</legend>
+      <label>
+        <input
+          type="radio"
+          name={`${match.id}-advances`}
+          value="home"
+          checked={value === "home"}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span><span className="flag-icon">{flagForTeam(match.home)}</span>{match.home}</span>
+      </label>
+      <label>
+        <input
+          type="radio"
+          name={`${match.id}-advances`}
+          value="away"
+          checked={value === "away"}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <span><span className="flag-icon">{flagForTeam(match.away)}</span>{match.away}</span>
+      </label>
+    </fieldset>
   );
 }
 
@@ -739,10 +798,19 @@ function scorePrediction(prediction, result) {
   const pickAway = Number(prediction.away);
   const realHome = Number(result.home);
   const realAway = Number(result.away);
+  let points = 0;
 
-  if (pickHome === realHome && pickAway === realAway) return 3;
-  if (winner(prediction) === winner(result)) return 1;
-  return 0;
+  if (pickHome === realHome && pickAway === realAway) {
+    points = 3;
+  } else if (winner(prediction) === winner(result)) {
+    points = 1;
+  }
+
+  if (pickHome === pickAway && realHome === realAway && prediction.advances && prediction.advances === result.advances) {
+    points += 1;
+  }
+
+  return points;
 }
 
 function playerScore(name, state, matchList) {
@@ -764,13 +832,15 @@ function persistLocal(state) {
 }
 
 function normalizeState(state) {
+  const phase = state?.meta?.phase || "groups";
+  const stateMatches = Array.isArray(state?.matches) ? state.matches : [];
   return {
     players: state?.players || {},
     predictions: state?.predictions || {},
     results: state?.results || {},
-    matches: Array.isArray(state?.matches) ? state.matches : [],
+    matches: phase === "knockout" ? reconcileKnockoutMatches(stateMatches) : stateMatches,
     meta: {
-      phase: state?.meta?.phase || "groups",
+      phase,
       previousWinner: state?.meta?.previousWinner || null
     }
   };
@@ -802,6 +872,7 @@ function applyMutation(state, action, payload, adminPin) {
     state.predictions[payload.name][payload.matchId] = {
       home: Number(payload.home),
       away: Number(payload.away),
+      advances: normalizeAdvances(payload.advances, payload.home, payload.away),
       updatedAt: new Date().toISOString()
     };
   }
@@ -811,6 +882,7 @@ function applyMutation(state, action, payload, adminPin) {
     state.results[payload.matchId] = {
       home: Number(payload.home),
       away: Number(payload.away),
+      advances: normalizeAdvances(payload.advances, payload.home, payload.away),
       updatedAt: new Date().toISOString()
     };
   }
@@ -856,6 +928,20 @@ function createKnockoutMatches() {
     .map((match) => ({ ...match }));
 }
 
+function reconcileKnockoutMatches(stateMatches) {
+  const officialMatches = createKnockoutMatches();
+  return officialMatches.map((match) => {
+    const savedMatch = stateMatches.find((item) => item.id === match.id);
+    if (!savedMatch) return match;
+    return {
+      ...match,
+      home: savedMatch.home || match.home,
+      away: savedMatch.away || match.away,
+      teamsConfirmed: savedMatch.teamsConfirmed ?? match.teamsConfirmed
+    };
+  });
+}
+
 function updateMatchTeams(state, payload) {
   const matchList = state.matches?.length ? state.matches : createKnockoutMatches();
   const match = matchList.find((item) => item.id === payload.matchId);
@@ -867,4 +953,16 @@ function updateMatchTeams(state, payload) {
   match.away = away;
   match.teamsConfirmed = true;
   state.matches = matchList;
+}
+
+function normalizeAdvances(advances, home, away) {
+  if (Number(home) !== Number(away)) return null;
+  if (advances !== "home" && advances !== "away") throw new Error("Selecciona quién clasifica por penales");
+  return advances;
+}
+
+function teamNameBySide(match, side) {
+  if (side === "home") return match.home;
+  if (side === "away") return match.away;
+  return "";
 }
