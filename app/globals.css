@@ -726,6 +726,78 @@ label {
   margin: 0;
 }
 
+.toast-region {
+  bottom: 18px;
+  left: 50%;
+  max-width: min(440px, calc(100vw - 24px));
+  position: fixed;
+  transform: translateX(-50%);
+  width: 100%;
+  z-index: 30;
+}
+
+.save-toast {
+  animation: toastIn 220ms ease-out both;
+  background: #17211c;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(21, 32, 26, 0.24);
+  color: #ffffff;
+  display: grid;
+  gap: 4px;
+  padding: 14px 46px 14px 16px;
+  position: relative;
+}
+
+.save-toast span {
+  color: #9ee0c6;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.save-toast strong {
+  font-size: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.save-toast small {
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.toast-close {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 30px;
+}
+
+.toast-close:hover,
+.toast-close:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 880px) {
   .app-header {
     align-items: start;
@@ -823,6 +895,15 @@ label {
   .place-2,
   .place-3 {
     min-height: 92px;
+  }
+
+  .toast-region {
+    bottom: 12px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .save-toast {
+    padding: 13px 42px 13px 14px;
   }
 }
 

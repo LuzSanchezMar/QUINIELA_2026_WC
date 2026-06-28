@@ -29,6 +29,7 @@ export default function QuinielaClient({ view = "player" }) {
   const [adminInput, setAdminInput] = useState("");
   const [status, setStatus] = useState({ text: "Iniciando", mode: "" });
   const [usingApi, setUsingApi] = useState(true);
+  const [toast, setToast] = useState(null);
   const activeMatches = useMemo(() => getActiveMatches(state), [state]);
 
   useEffect(() => {
@@ -47,6 +48,12 @@ export default function QuinielaClient({ view = "player" }) {
     setAdminInput(savedPin);
     loadState();
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const leaderboard = useMemo(() => {
     return Object.keys(state.players)
@@ -104,10 +111,11 @@ export default function QuinielaClient({ view = "player" }) {
         if (action === "prediction") {
           setStatus({ text: "Pronostico guardado", mode: "online" });
         }
+        return true;
       } catch (error) {
         setStatus({ text: error.message, mode: "error" });
+        return false;
       }
-      return;
     }
 
     setStatus({ text: "Guardando", mode: "loading" });
@@ -119,9 +127,21 @@ export default function QuinielaClient({ view = "player" }) {
       });
       setState(normalizeState(data.state));
       setStatus({ text: action === "prediction" ? "Pronostico guardado" : "En linea", mode: "online" });
+      return true;
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
+      return false;
     }
+  }
+
+  async function savePrediction(match, home, away) {
+    const saved = await saveState("prediction", { name: currentPlayer, matchId: match.id, home, away });
+    if (!saved) return;
+    setToast({
+      title: "Pronostico guardado",
+      message: `${match.home} ${home}-${away} ${match.away}`,
+      detail: "Guardado exitosamente."
+    });
   }
 
   async function saveResult(matchId, home, away) {
@@ -303,7 +323,7 @@ export default function QuinielaClient({ view = "player" }) {
                 match={match}
                 pick={(state.predictions[currentPlayer] || {})[match.id]}
                 result={state.results[match.id]}
-                onSave={(home, away) => saveState("prediction", { name: currentPlayer, matchId: match.id, home, away })}
+                onSave={(home, away) => savePrediction(match, home, away)}
                 canSave={currentSessionActive}
               />
             ))}
@@ -393,6 +413,18 @@ export default function QuinielaClient({ view = "player" }) {
           )}
         </aside>
       </main>
+      {toast && (
+        <div className="toast-region" role="status" aria-live="polite">
+          <div className="save-toast">
+            <span>{toast.title}</span>
+            <strong>{toast.message}</strong>
+            <small>{toast.detail}</small>
+            <button className="toast-close" type="button" aria-label="Cerrar notificacion" onClick={() => setToast(null)}>
+              x
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
