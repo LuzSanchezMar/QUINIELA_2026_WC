@@ -27,6 +27,8 @@ export default function QuinielaClient({ view = "player" }) {
   const [playerSession, setPlayerSession] = useState(null);
   const [adminPin, setAdminPin] = useState("");
   const [adminInput, setAdminInput] = useState("");
+  const [adminAuthorized, setAdminAuthorized] = useState(false);
+  const [adminError, setAdminError] = useState("");
   const [status, setStatus] = useState({ text: "Iniciando", mode: "" });
   const [usingApi, setUsingApi] = useState(true);
   const [toast, setToast] = useState(null);
@@ -47,6 +49,9 @@ export default function QuinielaClient({ view = "player" }) {
     setAdminPin(savedPin);
     setAdminInput(savedPin);
     loadState();
+    if (savedPin) {
+      verifyAdminPin(savedPin);
+    }
   }, []);
 
   useEffect(() => {
@@ -91,7 +96,7 @@ export default function QuinielaClient({ view = "player" }) {
       const data = await apiFetch();
       setUsingApi(true);
       setState(normalizeState(data.state));
-      setStatus({ text: data.storage === "kv" ? "En linea" : "Servidor local", mode: data.storage === "kv" ? "online" : "local" });
+      setStatus({ text: data.storage === "kv" ? "En línea" : "Servidor local", mode: data.storage === "kv" ? "online" : "local" });
     } catch {
       setUsingApi(false);
       setState(hydrateLocal());
@@ -109,7 +114,7 @@ export default function QuinielaClient({ view = "player" }) {
           return next;
         });
         if (action === "prediction") {
-          setStatus({ text: "Pronostico guardado", mode: "online" });
+          setStatus({ text: "Pronóstico guardado", mode: "online" });
         }
         return true;
       } catch (error) {
@@ -126,7 +131,7 @@ export default function QuinielaClient({ view = "player" }) {
         body: JSON.stringify({ action, payload })
       });
       setState(normalizeState(data.state));
-      setStatus({ text: action === "prediction" ? "Pronostico guardado" : "En linea", mode: "online" });
+      setStatus({ text: action === "prediction" ? "Pronóstico guardado" : "En línea", mode: "online" });
       return true;
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
@@ -138,7 +143,7 @@ export default function QuinielaClient({ view = "player" }) {
     const saved = await saveState("prediction", { name: currentPlayer, matchId: match.id, home, away });
     if (!saved) return;
     setToast({
-      title: "Pronostico guardado",
+      title: "Pronóstico guardado",
       message: `${match.home} ${home}-${away} ${match.away}`,
       detail: "Guardado exitosamente."
     });
@@ -168,7 +173,7 @@ export default function QuinielaClient({ view = "player" }) {
         body: JSON.stringify({ action, payload })
       });
       setState(normalizeState(data.state));
-      setStatus({ text: "En linea", mode: "online" });
+      setStatus({ text: "En línea", mode: "online" });
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
     }
@@ -194,7 +199,7 @@ export default function QuinielaClient({ view = "player" }) {
       setState(normalizeState(data.state));
       localStorage.setItem(nameKey, data.session.name);
       sessionStorage.setItem(sessionKey, JSON.stringify(data.session));
-      setStatus({ text: "En sesion", mode: "online" });
+      setStatus({ text: "En sesión", mode: "online" });
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
     }
@@ -213,11 +218,51 @@ export default function QuinielaClient({ view = "player" }) {
   function handleAdminSubmit(event) {
     event.preventDefault();
     const pin = adminInput.trim();
-    setAdminPin(pin);
-    sessionStorage.setItem(adminKey, pin);
+    verifyAdminPin(pin);
   }
 
-  const adminUnlocked = view !== "admin" || adminPin === "180799";
+  async function verifyAdminPin(pin) {
+    const cleanPin = pin.trim();
+    if (!cleanPin) return;
+
+    if (!usingApi) {
+      const allowed = cleanPin === "180799";
+      setAdminAuthorized(allowed);
+      setAdminPin(allowed ? cleanPin : "");
+      if (allowed) {
+        setAdminError("");
+        sessionStorage.setItem(adminKey, cleanPin);
+      } else {
+        setAdminError("PIN incorrecto");
+        sessionStorage.removeItem(adminKey);
+        setStatus({ text: "PIN incorrecto", mode: "error" });
+      }
+      return;
+    }
+
+    setStatus({ text: "Validando PIN", mode: "loading" });
+    setAdminError("");
+    try {
+      await apiFetch({
+        method: "POST",
+        headers: { "X-Admin-Pin": cleanPin },
+        body: JSON.stringify({ action: "admin-login" })
+      });
+      setAdminAuthorized(true);
+      setAdminPin(cleanPin);
+      setAdminError("");
+      sessionStorage.setItem(adminKey, cleanPin);
+      setStatus({ text: "Admin autorizado", mode: "online" });
+    } catch (error) {
+      setAdminAuthorized(false);
+      setAdminPin("");
+      setAdminError(error.message);
+      sessionStorage.removeItem(adminKey);
+      setStatus({ text: error.message, mode: "error" });
+    }
+  }
+
+  const adminUnlocked = view !== "admin" || adminAuthorized;
 
   return (
     <>
@@ -253,7 +298,7 @@ export default function QuinielaClient({ view = "player" }) {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Participante</p>
-              <h2 id="playerTitle">Tus pronosticos</h2>
+              <h2 id="playerTitle">Tus pronósticos</h2>
             </div>
           </div>
 
@@ -286,7 +331,7 @@ export default function QuinielaClient({ view = "player" }) {
                     onChange={(event) => setPlayerInput(event.target.value)}
                   />
                 </div>
-                <label htmlFor="playerPassword">Contrasena</label>
+                <label htmlFor="playerPassword">Contraseña</label>
                 <div className="inline-fields">
                   <input
                     id="playerPassword"
@@ -350,13 +395,13 @@ export default function QuinielaClient({ view = "player" }) {
                     <span className="leader-rank">{index + 1}</span>
                     <span>
                       <strong>{row.name}</strong>
-                      <span className="leader-subtext">{row.picks} pronosticos</span>
+                      <span className="leader-subtext">{row.picks} pronósticos</span>
                     </span>
                     <span className="leader-points">{row.points} pts</span>
                   </div>
                 ))
               ) : (
-                <div className="empty-state">Todavia no hay participantes.</div>
+                <div className="empty-state">Todavía no hay participantes.</div>
               )}
             </div>
           </section>
@@ -380,12 +425,15 @@ export default function QuinielaClient({ view = "player" }) {
                     type="password"
                     inputMode="numeric"
                     value={adminInput}
-                    onChange={(event) => setAdminInput(event.target.value)}
+                    onChange={(event) => {
+                      setAdminInput(event.target.value);
+                      setAdminError("");
+                    }}
                     autoFocus
                   />
                   <button type="submit">Entrar</button>
                 </div>
-                {adminPin && <div className="empty-state">PIN incorrecto.</div>}
+                {adminError && <div className="empty-state">{adminError}</div>}
               </form>
             ) : (
               <>
@@ -419,7 +467,7 @@ export default function QuinielaClient({ view = "player" }) {
             <span>{toast.title}</span>
             <strong>{toast.message}</strong>
             <small>{toast.detail}</small>
-            <button className="toast-close" type="button" aria-label="Cerrar notificacion" onClick={() => setToast(null)}>
+            <button className="toast-close" type="button" aria-label="Cerrar notificación" onClick={() => setToast(null)}>
               x
             </button>
           </div>
@@ -479,18 +527,18 @@ function MatchCard({ match, pick, result, onSave, canSave }) {
           />
         </label>
         <button className="save-pick" type="button" onClick={handleSave} disabled={locked}>
-          {loginRequired ? "Inicia sesion" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
+          {loginRequired ? "Inicia sesión" : teamsPending ? "Por definir" : locked ? "Cerrado" : "Guardar"}
         </button>
       </div>
       <div className="result-line">
         {result
           ? `Resultado: ${result.home}-${result.away} | Tus puntos: ${scorePrediction(pick, result)}`
           : loginRequired
-            ? "Debes iniciar sesion antes de meter pronosticos."
+            ? "Debes iniciar sesión antes de meter pronósticos."
           : teamsPending
-            ? "Equipos por definir. Pronostico pendiente"
+            ? "Equipos por definir. Pronóstico pendiente"
           : locked
-            ? "Pronostico cerrado. Resultado pendiente"
+            ? "Pronóstico cerrado. Resultado pendiente"
             : "Resultado pendiente"}
       </div>
     </article>
@@ -544,9 +592,9 @@ function AdminQuinielaControl({ phase, winner, leaderboard, onClose }) {
 function WinnerBanner({ winner, compact = false }) {
   return (
     <div className={compact ? "winner-banner winner-banner-compact" : "winner-banner"}>
-      <span>Ganador quiniela anterior</span>
+      <span>Ganador de la quiniela anterior</span>
       <strong>{winner.name}</strong>
-      <small>{winner.points} pts</small>
+      <small>Tuvieron 59 puntos</small>
     </div>
   );
 }
@@ -747,8 +795,8 @@ function applyMutation(state, action, payload, adminPin) {
   if (action === "prediction") {
     const match = getActiveMatches(state).find((item) => item.id === payload.matchId);
     if (!match) throw new Error("Partido no valido");
-    if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
-    if (hasMatchStarted(match)) throw new Error("El partido ya empezo");
+    if (match.teamsConfirmed === false) throw new Error("Los equipos aún no están definidos");
+    if (hasMatchStarted(match)) throw new Error("El partido ya empezó");
     state.players[payload.name] = state.players[payload.name] || { name: payload.name, joinedAt: new Date().toISOString() };
     state.predictions[payload.name] = state.predictions[payload.name] || {};
     state.predictions[payload.name][payload.matchId] = {
@@ -775,8 +823,7 @@ function applyMutation(state, action, payload, adminPin) {
   if (action === "close-current") {
     if (adminPin !== "180799") throw new Error("PIN incorrecto en modo local");
     const winnerName = normalizeName(payload.winnerName || "");
-    if (!winnerName) throw new Error("Ganador invalido");
-    const winnerPoints = playerScore(winnerName, state, getActiveMatches(state));
+    if (!winnerName) throw new Error("Ganador inválido");
     state.players = {};
     state.predictions = {};
     state.results = {};
@@ -785,7 +832,7 @@ function applyMutation(state, action, payload, adminPin) {
       phase: "knockout",
       previousWinner: {
         name: winnerName,
-        points: winnerPoints,
+        points: 59,
         closedAt: new Date().toISOString()
       }
     };
@@ -815,7 +862,7 @@ function updateMatchTeams(state, payload) {
   if (!match) throw new Error("Partido no valido");
   const home = normalizeName(payload.home || "");
   const away = normalizeName(payload.away || "");
-  if (!home || !away) throw new Error("Equipos invalidos");
+  if (!home || !away) throw new Error("Equipos inválidos");
   match.home = home;
   match.away = away;
   match.teamsConfirmed = true;

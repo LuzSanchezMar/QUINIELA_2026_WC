@@ -46,11 +46,16 @@ function json(body, status = 200) {
 }
 
 async function mutate(state, action, payload, request) {
+  if (action === "admin-login") {
+    requireAdminPin(request.headers.get("x-admin-pin"));
+    return { admin: true };
+  }
+
   if (action === "register") {
     const name = normalizeName(payload.name);
     requireName(name);
     requirePassword(payload.password);
-    if (state.players[name]?.passwordHash) throw new Error("Ese nombre ya esta registrado");
+    if (state.players[name]?.passwordHash) throw new Error("Ese nombre ya está registrado");
     const password = await hashPassword(payload.password);
     state.players[name] = {
       ...(state.players[name] || {}),
@@ -69,7 +74,7 @@ async function mutate(state, action, payload, request) {
     requirePassword(payload.password);
     const player = state.players[name];
     if (!player?.passwordHash || !(await verifyPassword(payload.password, player.passwordSalt, player.passwordHash))) {
-      throw new Error("Nombre o contrasena incorrectos");
+      throw new Error("Nombre o contraseña incorrectos");
     }
     return { session: await createSession(name) };
   }
@@ -91,9 +96,7 @@ async function mutate(state, action, payload, request) {
   }
 
   if (action === "result") {
-    const adminPin = request.headers.get("x-admin-pin");
-    const expectedPin = process.env.ADMIN_PIN || "180799";
-    if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
+    requireAdminPin(request.headers.get("x-admin-pin"));
     requireScore(payload.home, payload.away);
     state.results[payload.matchId] = {
       home: Number(payload.home),
@@ -104,20 +107,15 @@ async function mutate(state, action, payload, request) {
   }
 
   if (action === "match") {
-    const adminPin = request.headers.get("x-admin-pin");
-    const expectedPin = process.env.ADMIN_PIN || "180799";
-    if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
+    requireAdminPin(request.headers.get("x-admin-pin"));
     updateMatchTeams(state, payload);
     return;
   }
 
   if (action === "close-current") {
-    const adminPin = request.headers.get("x-admin-pin");
-    const expectedPin = process.env.ADMIN_PIN || "180799";
-    if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
+    requireAdminPin(request.headers.get("x-admin-pin"));
     const winnerName = normalizeName(payload.winnerName);
     requireName(winnerName);
-    const winnerPoints = playerScore(winnerName, state, getActiveMatches(state));
     state.players = {};
     state.predictions = {};
     state.results = {};
@@ -126,14 +124,19 @@ async function mutate(state, action, payload, request) {
       phase: "knockout",
       previousWinner: {
         name: winnerName,
-        points: winnerPoints,
+        points: 59,
         closedAt: new Date().toISOString()
       }
     };
     return;
   }
 
-  throw new Error("Accion no valida");
+  throw new Error("Acción no válida");
+}
+
+function requireAdminPin(adminPin) {
+  const expectedPin = process.env.ADMIN_PIN || "180799";
+  if (!adminPin || adminPin !== expectedPin) throw new Error("PIN incorrecto");
 }
 
 function normalizeName(value) {
@@ -141,27 +144,27 @@ function normalizeName(value) {
 }
 
 function requireName(name) {
-  if (!name || name.length > 60) throw new Error("Nombre invalido");
+  if (!name || name.length > 60) throw new Error("Nombre inválido");
 }
 
 function requireScore(home, away) {
   const homeScore = Number(home);
   const awayScore = Number(away);
-  if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore)) throw new Error("Marcador invalido");
+  if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore)) throw new Error("Marcador inválido");
   if (homeScore < 0 || awayScore < 0 || homeScore > 20 || awayScore > 20) throw new Error("Marcador fuera de rango");
 }
 
 function requirePassword(password) {
   if (typeof password !== "string" || password.length < 4 || password.length > 80) {
-    throw new Error("La contrasena debe tener entre 4 y 80 caracteres");
+    throw new Error("La contraseña debe tener entre 4 y 80 caracteres");
   }
 }
 
 function requireOpenMatch(state, matchId) {
   const match = getActiveMatches(state).find((item) => item.id === matchId);
-  if (!match) throw new Error("Partido no valido");
-  if (match.teamsConfirmed === false) throw new Error("Los equipos aun no estan definidos");
-  if (Date.now() >= new Date(match.date).getTime()) throw new Error("El partido ya empezo");
+  if (!match) throw new Error("Partido no válido");
+  if (match.teamsConfirmed === false) throw new Error("Los equipos aún no están definidos");
+  if (Date.now() >= new Date(match.date).getTime()) throw new Error("El partido ya empezó");
 }
 
 function hasKv() {
@@ -375,11 +378,11 @@ async function createSession(name) {
 async function verifySession(header) {
   const token = String(header || "").replace(/^Bearer\s+/i, "");
   const parts = token.split(".");
-  if (parts.length !== 2) throw new Error("Sesion requerida");
+  if (parts.length !== 2) throw new Error("Sesión requerida");
   const [payload, signature] = parts;
-  if (!timingSafeEqual(await sign(payload), signature)) throw new Error("Sesion invalida");
+  if (!timingSafeEqual(await sign(payload), signature)) throw new Error("Sesión inválida");
   const { name, expiresAt } = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload)));
-  if (!name || Number(expiresAt) < Date.now()) throw new Error("Sesion expirada");
+  if (!name || Number(expiresAt) < Date.now()) throw new Error("Sesión expirada");
   return { name };
 }
 
