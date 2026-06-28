@@ -546,11 +546,11 @@ function AdminCard({ match, result, canEditTeams, onSave, onSaveTeams }) {
       {canEditTeams && (
         <div className="admin-teams-row">
           <label>
-            Equipo local
+            <span><span className="flag-icon">{flagForTeam(homeTeam)}</span>Equipo local</span>
             <input value={homeTeam} onChange={(event) => setHomeTeam(event.target.value)} />
           </label>
           <label>
-            Equipo visitante
+            <span><span className="flag-icon">{flagForTeam(awayTeam)}</span>Equipo visitante</span>
             <input value={awayTeam} onChange={(event) => setAwayTeam(event.target.value)} />
           </label>
           <button type="button" onClick={handleSaveTeams}>Guardar equipos</button>
