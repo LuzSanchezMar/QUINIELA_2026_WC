@@ -351,7 +351,7 @@ function scorePrediction(prediction, result) {
 
   if (pickHome === realHome && pickAway === realAway) {
     points = 3;
-  } else if (winner(prediction) === winner(result)) {
+  } else if (winner(prediction) === winner(result) || predictedWinnerMatchesAdvancingTeam(prediction, result)) {
     points = 1;
   }
 
@@ -367,6 +367,14 @@ function winner(score) {
   if (Number(score.home) > Number(score.away)) return "home";
   if (Number(score.home) < Number(score.away)) return "away";
   return "draw";
+}
+
+function predictedWinnerMatchesAdvancingTeam(prediction, result) {
+  const predictedWinner = winner(prediction);
+  const realWinner = winner(result);
+  if (realWinner === "draw" && result.advances) return predictedWinner === result.advances;
+  if (predictedWinner === "draw" && prediction.advances) return prediction.advances === realWinner;
+  return false;
 }
 
 function clone(value) {

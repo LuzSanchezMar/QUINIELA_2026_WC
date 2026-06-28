@@ -357,7 +357,7 @@ export default function QuinielaClient({ view = "player" }) {
             <h3>Sistema de puntos</h3>
             <div className="rules-grid">
               <span><strong>3 pts</strong> marcador exacto</span>
-              <span><strong>1 pt</strong> ganador o empate correcto</span>
+              <span><strong>1 pt</strong> ganador, clasificado o empate correcto</span>
               <span><strong>+1 pt</strong> clasificado por penales correcto</span>
               <span><strong>0 pts</strong> sin coincidencia</span>
             </div>
@@ -811,7 +811,7 @@ function scorePrediction(prediction, result) {
 
   if (pickHome === realHome && pickAway === realAway) {
     points = 3;
-  } else if (winner(prediction) === winner(result)) {
+  } else if (winner(prediction) === winner(result) || predictedWinnerMatchesAdvancingTeam(prediction, result)) {
     points = 1;
   }
 
@@ -825,6 +825,14 @@ function scorePrediction(prediction, result) {
 function playerScore(name, state, matchList) {
   const picks = state.predictions[name] || {};
   return matchList.reduce((total, match) => total + scorePrediction(picks[match.id], state.results[match.id]), 0);
+}
+
+function predictedWinnerMatchesAdvancingTeam(prediction, result) {
+  const predictedWinner = winner(prediction);
+  const realWinner = winner(result);
+  if (realWinner === "draw" && result.advances) return predictedWinner === result.advances;
+  if (predictedWinner === "draw" && prediction.advances) return prediction.advances === realWinner;
+  return false;
 }
 
 function hydrateLocal() {
