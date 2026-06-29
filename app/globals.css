@@ -30,7 +30,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -58,7 +59,8 @@ button:disabled:focus-visible {
   cursor: not-allowed;
 }
 
-input {
+input,
+select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -68,7 +70,8 @@ input {
   padding: 8px 10px;
 }
 
-input:disabled {
+input:disabled,
+select:disabled {
   background: #eeece6;
   color: var(--muted);
   cursor: not-allowed;
@@ -703,6 +706,11 @@ label {
 .close-quiniela-form {
   display: grid;
   gap: 6px;
+}
+
+.reset-password-form {
+  display: grid;
+  gap: 8px;
 }
 
 .winner-banner {

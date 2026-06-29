@@ -157,6 +157,17 @@ export default function QuinielaClient({ view = "player" }) {
     return saveAdminAction("match", { matchId, home, away });
   }
 
+  async function resetPlayerPassword(name, password) {
+    const saved = await saveAdminAction("reset-password", { name, password });
+    if (!saved) return false;
+    setToast({
+      title: "Contraseña restablecida",
+      message: name,
+      detail: "Comparte la contraseña temporal con el participante."
+    });
+    return true;
+  }
+
   async function saveAdminAction(action, payload) {
     if (!usingApi) {
       return saveState(action, payload);
@@ -174,8 +185,10 @@ export default function QuinielaClient({ view = "player" }) {
       });
       setState(normalizeState(data.state));
       setStatus({ text: "En línea", mode: "online" });
+      return true;
     } catch (error) {
       setStatus({ text: error.message, mode: "error" });
+      return false;
     }
   }
 
@@ -445,6 +458,7 @@ export default function QuinielaClient({ view = "player" }) {
                   leaderboard={leaderboard}
                   onClose={handleCloseQuiniela}
                 />
+                <AdminPasswordReset players={Object.keys(state.players)} onReset={resetPlayerPassword} />
                 <div className="admin-results">
                   {activeMatches.map((match) => (
                     <AdminCard
@@ -621,6 +635,62 @@ function WinnerBanner({ winner, compact = false }) {
       <strong>{winner.name}</strong>
       <small>Tuvieron 59 puntos</small>
     </div>
+  );
+}
+
+function AdminPasswordReset({ players, onReset }) {
+  const [selectedPlayer, setSelectedPlayer] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+
+  useEffect(() => {
+    if (!selectedPlayer && players.length) {
+      setSelectedPlayer(players[0]);
+    }
+  }, [players, selectedPlayer]);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!selectedPlayer || temporaryPassword.length < 4) return;
+    const saved = await onReset(selectedPlayer, temporaryPassword);
+    if (saved) setTemporaryPassword("");
+  }
+
+  return (
+    <section className="admin-control" aria-label="Restablecer contraseña">
+      <div>
+        <h3>Restablecer contraseña</h3>
+        <p className="empty-state">Asigna una contraseña temporal a un participante.</p>
+      </div>
+      {players.length ? (
+        <form className="reset-password-form" onSubmit={handleSubmit}>
+          <label htmlFor="resetPlayer">Participante</label>
+          <select
+            id="resetPlayer"
+            value={selectedPlayer}
+            onChange={(event) => setSelectedPlayer(event.target.value)}
+          >
+            {players.map((player) => (
+              <option key={player} value={player}>{player}</option>
+            ))}
+          </select>
+          <label htmlFor="temporaryPassword">Contraseña temporal</label>
+          <div className="inline-fields">
+            <input
+              id="temporaryPassword"
+              type="text"
+              minLength="4"
+              maxLength="80"
+              value={temporaryPassword}
+              onChange={(event) => setTemporaryPassword(event.target.value)}
+              placeholder="Mínimo 4 caracteres"
+            />
+            <button type="submit" disabled={!selectedPlayer || temporaryPassword.length < 4}>Restablecer</button>
+          </div>
+        </form>
+      ) : (
+        <div className="empty-state">Todavía no hay participantes.</div>
+      )}
+    </section>
   );
 }
 
@@ -902,6 +972,21 @@ function applyMutation(state, action, payload, adminPin) {
       away: Number(payload.away),
       advances: normalizeAdvances(payload.advances, payload.home, payload.away),
       updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (action === "reset-password") {
+    if (adminPin !== "180799") throw new Error("PIN incorrecto en modo local");
+    const name = normalizeName(payload.name || "");
+    if (!state.players[name]) throw new Error("Participante no registrado");
+    if (typeof payload.password !== "string" || payload.password.length < 4 || payload.password.length > 80) {
+      throw new Error("La contraseña debe tener entre 4 y 80 caracteres");
+    }
+    state.players[name] = {
+      ...state.players[name],
+      passwordHash: payload.password,
+      passwordSalt: "local-reset",
+      passwordResetAt: new Date().toISOString()
     };
   }
 

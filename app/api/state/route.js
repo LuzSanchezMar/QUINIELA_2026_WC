@@ -79,6 +79,23 @@ async function mutate(state, action, payload, request) {
     return { session: await createSession(name) };
   }
 
+  if (action === "reset-password") {
+    requireAdminPin(request.headers.get("x-admin-pin"));
+    const name = normalizeName(payload.name);
+    requireName(name);
+    requirePassword(payload.password);
+    const player = state.players[name];
+    if (!player?.passwordHash) throw new Error("Participante no registrado");
+    const password = await hashPassword(payload.password);
+    state.players[name] = {
+      ...player,
+      passwordHash: password.hash,
+      passwordSalt: password.salt,
+      passwordResetAt: new Date().toISOString()
+    };
+    return;
+  }
+
   if (action === "prediction") {
     const session = await verifySession(request.headers.get("authorization"));
     const name = normalizeName(session.name);
