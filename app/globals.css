@@ -304,6 +304,23 @@ label {
   padding: 10px 12px;
 }
 
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.password-change-form {
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
 .match-list,
 .admin-results,
 .leaderboard,
@@ -946,6 +963,15 @@ label {
   .penalty-selector,
   .podium {
     grid-template-columns: 1fr;
+  }
+
+  .session-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .session-actions button {
+    width: 100%;
   }
 
   .admin-teams-row {

@@ -24,6 +24,9 @@ export default function QuinielaClient({ view = "player" }) {
   const [currentPlayer, setCurrentPlayer] = useState("");
   const [playerInput, setPlayerInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
+  const [currentPasswordInput, setCurrentPasswordInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [playerSession, setPlayerSession] = useState(null);
   const [adminPin, setAdminPin] = useState("");
   const [adminInput, setAdminInput] = useState("");
@@ -218,6 +221,44 @@ export default function QuinielaClient({ view = "player" }) {
     }
   }
 
+  async function handlePasswordChange(event) {
+    event.preventDefault();
+    if (!playerSession?.token || !currentPasswordInput || !newPasswordInput) return;
+    if (!usingApi) {
+      setStatus({ text: "Cambio de contraseña disponible en línea", mode: "error" });
+      return;
+    }
+
+    setStatus({ text: "Actualizando contraseña", mode: "loading" });
+    try {
+      const data = await apiFetch({
+        method: "POST",
+        headers: { Authorization: `Bearer ${playerSession.token}` },
+        body: JSON.stringify({
+          action: "change-password",
+          payload: {
+            currentPassword: currentPasswordInput,
+            newPassword: newPasswordInput
+          }
+        })
+      });
+      setPlayerSession(data.session);
+      sessionStorage.setItem(sessionKey, JSON.stringify(data.session));
+      setCurrentPasswordInput("");
+      setNewPasswordInput("");
+      setShowPasswordChange(false);
+      setState(normalizeState(data.state));
+      setStatus({ text: "Contraseña actualizada", mode: "online" });
+      setToast({
+        title: "Contraseña actualizada",
+        message: data.session.name,
+        detail: "Ya puedes usar tu nueva contraseña."
+      });
+    } catch (error) {
+      setStatus({ text: error.message, mode: "error" });
+    }
+  }
+
   function handlePlayerLogout() {
     setCurrentPlayer("");
     setPlayerSession(null);
@@ -316,19 +357,51 @@ export default function QuinielaClient({ view = "player" }) {
           </div>
 
           {currentPlayer && playerSession?.token ? (
-            <div className="session-bar">
-              {currentSessionActive ? (
-                <>
-                  <span>Jugando como <strong>{currentPlayer}</strong></span>
-                  <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Salir</button>
-                </>
-              ) : (
-                <>
-                  <span>Tu cuenta anterior pertenece a la quiniela cerrada.</span>
-                  <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Entrar de nuevo</button>
-                </>
+            <>
+              <div className="session-bar">
+                {currentSessionActive ? (
+                  <>
+                    <span>Jugando como <strong>{currentPlayer}</strong></span>
+                    <div className="session-actions">
+                      <button className="ghost-button" type="button" onClick={() => setShowPasswordChange((visible) => !visible)}>
+                        Cambiar contraseña
+                      </button>
+                      <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Salir</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span>Tu cuenta anterior pertenece a la quiniela cerrada.</span>
+                    <button className="ghost-button" type="button" onClick={handlePlayerLogout}>Entrar de nuevo</button>
+                  </>
+                )}
+              </div>
+              {currentSessionActive && showPasswordChange && (
+                <form className="password-change-form" onSubmit={handlePasswordChange}>
+                  <label htmlFor="currentPassword">Contraseña actual</label>
+                  <input
+                    id="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPasswordInput}
+                    onChange={(event) => setCurrentPasswordInput(event.target.value)}
+                  />
+                  <label htmlFor="newPassword">Nueva contraseña</label>
+                  <div className="inline-fields">
+                    <input
+                      id="newPassword"
+                      type="password"
+                      minLength="4"
+                      maxLength="80"
+                      autoComplete="new-password"
+                      value={newPasswordInput}
+                      onChange={(event) => setNewPasswordInput(event.target.value)}
+                    />
+                    <button type="submit" disabled={!currentPasswordInput || newPasswordInput.length < 4}>Guardar contraseña</button>
+                  </div>
+                </form>
               )}
-            </div>
+            </>
           ) : (
             <>
               <form className="name-form" onSubmit={handlePlayerSubmit}>

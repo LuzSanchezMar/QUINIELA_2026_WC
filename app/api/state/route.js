@@ -96,6 +96,25 @@ async function mutate(state, action, payload, request) {
     return;
   }
 
+  if (action === "change-password") {
+    const session = await verifySession(request.headers.get("authorization"));
+    const name = normalizeName(session.name);
+    requirePassword(payload.currentPassword);
+    requirePassword(payload.newPassword);
+    const player = state.players[name];
+    if (!player?.passwordHash || !(await verifyPassword(payload.currentPassword, player.passwordSalt, player.passwordHash))) {
+      throw new Error("Contraseña actual incorrecta");
+    }
+    const password = await hashPassword(payload.newPassword);
+    state.players[name] = {
+      ...player,
+      passwordHash: password.hash,
+      passwordSalt: password.salt,
+      passwordChangedAt: new Date().toISOString()
+    };
+    return { session: await createSession(name) };
+  }
+
   if (action === "prediction") {
     const session = await verifySession(request.headers.get("authorization"));
     const name = normalizeName(session.name);
