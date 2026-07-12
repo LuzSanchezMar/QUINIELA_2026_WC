@@ -117,15 +117,6 @@ label {
   gap: 14px;
 }
 
-.wc-logo {
-  background: #111;
-  border-radius: 8px;
-  height: 86px;
-  object-fit: contain;
-  padding: 8px;
-  width: 66px;
-}
-
 .eyebrow {
   color: var(--accent);
   font-size: 0.78rem;

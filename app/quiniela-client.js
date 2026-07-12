@@ -323,13 +323,7 @@ export default function QuinielaClient({ view = "player" }) {
       <header className="app-header">
         <div>
           <div className="brand-line">
-            <img
-              className="wc-logo"
-              src="https://upload.wikimedia.org/wikipedia/en/thumb/1/17/2026_FIFA_World_Cup_emblem.svg/250px-2026_FIFA_World_Cup_emblem.svg.png"
-              alt="FIFA World Cup 2026"
-            />
             <div>
-              <p className="eyebrow">Mundial 2026</p>
               <h1>Quiniela familiar</h1>
             </div>
           </div>
@@ -430,7 +424,7 @@ export default function QuinielaClient({ view = "player" }) {
                   />
                   <div className="auth-actions">
                     <button type="submit">Entrar</button>
-                    <button className="ghost-button" type="button" onClick={() => handlePlayerAuth("register")}>Crear cuenta</button>
+                    <button className="ghost-button" type="button" onClick={() => handlePlayerAuth("register")}>Crear participante</button>
                   </div>
                 </div>
               </form>
